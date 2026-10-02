@@ -145,54 +145,117 @@ Check karo ki Flask backend running hai aur URL correct hai.`;
   // ============================================================
 
   useEffect(() => {
-    const loadOptions = async () => {
-      try {
-        setPredictionError("");
+  let cancelled = false;
 
-        const response = await fetch(`${API_URL}/options`);
+  const loadOptions = async () => {
+    try {
+      setPredictionError("");
 
-        const data = await parseResponse(response);
-
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.error ||
-              `Unable to load dataset options. HTTP ${response.status}`
-          );
+      const response = await fetch(
+        `${API_URL}/options?t=${Date.now()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
         }
+      );
 
-        setOptions({
-          brands: data.brands || [],
-          brand_models: data.brand_models || {},
-          model_variants: data.model_variants || {},
-          fuels: data.fuels || [],
-          transmissions: data.transmissions || [],
-          owners: data.owners || [],
-          seats: data.seats || [],
-        });
+      const data = await parseResponse(response);
 
-        const firstBrand = data.brands?.[0] || "";
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            `Unable to load dataset options. HTTP ${response.status}`
+        );
+      }
 
-        const firstModel =
-          data.brand_models?.[firstBrand]?.[0] || "";
+      if (cancelled) {
+        return;
+      }
 
-        const firstVariant =
-          data.model_variants?.[
-            `${firstBrand}|||${firstModel}`
-          ]?.[0] || "";
+      const loadedOptions = {
+        brands: Array.isArray(data.brands)
+          ? data.brands
+          : [],
 
-        setPredictionForm((prev) => ({
-          ...prev,
-          brand: firstBrand,
-          model: firstModel,
-          variant: firstVariant,
-          fuel: data.fuels?.[0] || "",
-          transmission: data.transmissions?.[0] || "",
-          owner: data.owners?.[0] || "",
-          seats: data.seats?.[0] || 5,
-        }));
-      } catch (error) {
-        console.error("Options loading error:", error);
+        brand_models:
+          data.brand_models &&
+          typeof data.brand_models === "object"
+            ? data.brand_models
+            : {},
 
+        model_variants:
+          data.model_variants &&
+          typeof data.model_variants === "object"
+            ? data.model_variants
+            : {},
+
+        fuels: Array.isArray(data.fuels)
+          ? data.fuels
+          : [],
+
+        transmissions: Array.isArray(
+          data.transmissions
+        )
+          ? data.transmissions
+          : [],
+
+        owners: Array.isArray(data.owners)
+          ? data.owners
+          : [],
+
+        seats: Array.isArray(data.seats)
+          ? data.seats
+          : [],
+      };
+
+      setOptions(loadedOptions);
+
+      const firstBrand =
+        loadedOptions.brands[0] || "";
+
+      const firstModel =
+        loadedOptions.brand_models?.[
+          firstBrand
+        ]?.[0] || "";
+
+      const firstVariant =
+        loadedOptions.model_variants?.[
+          `${firstBrand}|||${firstModel}`
+        ]?.[0] || "";
+
+      setPredictionForm((prev) => ({
+        ...prev,
+
+        brand: firstBrand,
+
+        model: firstModel,
+
+        variant: firstVariant,
+
+        fuel:
+          loadedOptions.fuels[0] || "",
+
+        transmission:
+          loadedOptions.transmissions[0] ||
+          "",
+
+        owner:
+          loadedOptions.owners[0] || "",
+
+        seats:
+          loadedOptions.seats[0] || 5,
+      }));
+
+    } catch (error) {
+      console.error(
+        "Options loading error:",
+        error
+      );
+
+      if (!cancelled) {
         setPredictionError(
           getApiErrorMessage(
             error,
@@ -200,11 +263,16 @@ Check karo ki Flask backend running hai aur URL correct hai.`;
           )
         );
       }
-    };
 
-    loadOptions();
-  }, []);
+    }
+  };
 
+  loadOptions();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
   // ============================================================
   // DEPENDENT DROPDOWNS
   // ============================================================
