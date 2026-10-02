@@ -1,7 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://127.0.0.1:5000";
+// ============================================================
+// API CONFIGURATION
+// ============================================================
+// Local:
+// http://127.0.0.1:5000
+//
+// Deployed frontend:
+// Set VITE_API_URL in your hosting environment.
+// Example:
+// VITE_API_URL=https://carvalue-backend-h10i.onrender.com
+//
+// If VITE_API_URL is not provided, local backend is used.
+// ============================================================
+
+const API_URL = "https://carvalue-backend-h10i.onrender.com";
 
 function App() {
   const [activePage, setActivePage] = useState("home");
@@ -82,22 +96,79 @@ function App() {
   const [resaleResult, setResaleResult] = useState(null);
 
   // ============================================================
+  // API ERROR HELPER
+  // ============================================================
+
+  const getApiErrorMessage = (error, fallback) => {
+    if (!error) {
+      return fallback;
+    }
+
+    if (
+      error instanceof TypeError &&
+      error.message.toLowerCase().includes("fetch")
+    ) {
+      return `Backend se connection nahi ho pa raha hai.
+
+Backend URL:
+${API_URL}
+
+Check karo ki Flask backend running hai aur URL correct hai.`;
+    }
+
+    return error.message || fallback;
+  };
+
+  // ============================================================
+  // SAFE JSON RESPONSE
+  // ============================================================
+
+  const parseResponse = async (response) => {
+    const contentType =
+      response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+
+    const text = await response.text();
+
+    throw new Error(
+      `Backend ne JSON response nahi diya. HTTP ${response.status}: ${
+        text || "Unknown response"
+      }`
+    );
+  };
+
+  // ============================================================
   // LOAD OPTIONS
   // ============================================================
 
   useEffect(() => {
     const loadOptions = async () => {
       try {
+        setPredictionError("");
+
         const response = await fetch(`${API_URL}/options`);
-        const data = await response.json();
+
+        const data = await parseResponse(response);
 
         if (!response.ok || !data.success) {
           throw new Error(
-            data.error || "Unable to load dataset options."
+            data.error ||
+              `Unable to load dataset options. HTTP ${response.status}`
           );
         }
 
-        setOptions(data);
+        setOptions({
+          brands: data.brands || [],
+          brand_models: data.brand_models || {},
+          model_variants: data.model_variants || {},
+          fuels: data.fuels || [],
+          transmissions: data.transmissions || [],
+          owners: data.owners || [],
+          seats: data.seats || [],
+        });
 
         const firstBrand = data.brands?.[0] || "";
 
@@ -123,7 +194,10 @@ function App() {
         console.error("Options loading error:", error);
 
         setPredictionError(
-          "Backend se dataset options load nahi ho pa rahe hain."
+          getApiErrorMessage(
+            error,
+            "Backend se dataset options load nahi ho pa rahe hain."
+          )
         );
       }
     };
@@ -132,37 +206,17 @@ function App() {
   }, []);
 
   // ============================================================
-  // JOTFORM AI CHATBOT
-  // ============================================================
-
-  useEffect(() => {
-    const SCRIPT_SRC =
-      "https://cdn.jotfor.ms/agent/embedjs/01a0fcdc291070008e4c2016446d7a79dfac/embed.js";
-
-    const existingScript = document.querySelector(
-      `script[src="${SCRIPT_SRC}"]`
-    );
-
-    if (existingScript) {
-      return;
-    }
-
-    const script = document.createElement("script");
-
-    script.src = SCRIPT_SRC;
-    script.async = true;
-
-    document.body.appendChild(script);
-  }, []);
-
-  // ============================================================
   // DEPENDENT DROPDOWNS
   // ============================================================
 
   const availableModels = useMemo(() => {
-    if (!predictionForm.brand) return [];
+    if (!predictionForm.brand) {
+      return [];
+    }
 
-    return options.brand_models?.[predictionForm.brand] || [];
+    return (
+      options.brand_models?.[predictionForm.brand] || []
+    );
   }, [options.brand_models, predictionForm.brand]);
 
   const variantKey =
@@ -171,7 +225,9 @@ function App() {
       : "";
 
   const availableVariants = useMemo(() => {
-    if (!variantKey) return [];
+    if (!variantKey) {
+      return [];
+    }
 
     return options.model_variants?.[variantKey] || [];
   }, [options.model_variants, variantKey]);
@@ -193,7 +249,11 @@ function App() {
   };
 
   const formatDistance = (distance) => {
-    if (distance === null || distance === undefined) {
+    if (
+      distance === null ||
+      distance === undefined ||
+      distance === ""
+    ) {
       return "-";
     }
 
@@ -239,7 +299,8 @@ function App() {
   // ============================================================
 
   const handleBrandChange = (brand) => {
-    const models = options.brand_models?.[brand] || [];
+    const models =
+      options.brand_models?.[brand] || [];
 
     const firstModel = models[0] || "";
 
@@ -327,11 +388,12 @@ function App() {
         }),
       });
 
-      const data = await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error || "Unable to get recommendations."
+          data.error ||
+            `Unable to get recommendations. HTTP ${response.status}`
         );
       }
 
@@ -341,8 +403,10 @@ function App() {
       console.error("Recommendation error:", error);
 
       setRecommendError(
-        error.message ||
+        getApiErrorMessage(
+          error,
           "Something went wrong while getting recommendations."
+        )
       );
     } finally {
       setRecommendLoading(false);
@@ -371,6 +435,18 @@ function App() {
         throw new Error("Please select a variant.");
       }
 
+      if (!predictionForm.fuel) {
+        throw new Error("Please select fuel type.");
+      }
+
+      if (!predictionForm.transmission) {
+        throw new Error("Please select transmission.");
+      }
+
+      if (!predictionForm.owner) {
+        throw new Error("Please select ownership.");
+      }
+
       const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: {
@@ -396,11 +472,12 @@ function App() {
         }),
       });
 
-      const data = await response.json();
+      const data = await parseResponse(response);
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error || "Price prediction failed."
+          data.error ||
+            `Price prediction failed. HTTP ${response.status}`
         );
       }
 
@@ -422,7 +499,10 @@ function App() {
       console.error("Prediction error:", error);
 
       setPredictionError(
-        error.message || "Unable to predict price."
+        getApiErrorMessage(
+          error,
+          "Unable to predict price."
+        )
       );
     } finally {
       setPredictionLoading(false);
@@ -483,7 +563,9 @@ function App() {
     }
 
     if (compareCars.length >= 3) {
-      alert("You can compare maximum 3 cars at a time.");
+      alert(
+        "You can compare maximum 3 cars at a time."
+      );
       return;
     }
 
@@ -527,6 +609,10 @@ function App() {
       ? "Close to estimated market value"
       : "Potentially above estimated value";
 
+  // Prevent unused-variable warnings while preserving
+  // fair-price calculation for future UI use.
+  void fairPriceStatus;
+
   // ============================================================
   // PAGE CONTENT
   // ============================================================
@@ -545,7 +631,9 @@ function App() {
           type="button"
           onClick={() => setActivePage("home")}
         >
-          <span className="brand-mark">C</span>
+          <span className="brand-mark">
+            C
+          </span>
 
           <span>
             <strong>CarValue</strong>
@@ -556,36 +644,66 @@ function App() {
         <div className="nav-links">
 
           <button
-            className={activePage === "home" ? "active" : ""}
-            onClick={() => setActivePage("home")}
+            className={
+              activePage === "home"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setActivePage("home")
+            }
           >
             Home
           </button>
 
           <button
-            className={activePage === "dashboard" ? "active" : ""}
-            onClick={() => setActivePage("dashboard")}
+            className={
+              activePage === "dashboard"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setActivePage("dashboard")
+            }
           >
             Dashboard
           </button>
 
           <button
-            className={activePage === "find" ? "active" : ""}
-            onClick={() => setActivePage("find")}
+            className={
+              activePage === "find"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setActivePage("find")
+            }
           >
             Find My Car
           </button>
 
           <button
-            className={activePage === "compare" ? "active" : ""}
-            onClick={() => setActivePage("compare")}
+            className={
+              activePage === "compare"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setActivePage("compare")
+            }
           >
             Compare
           </button>
 
           <button
-            className={activePage === "resale" ? "active" : ""}
-            onClick={() => setActivePage("resale")}
+            className={
+              activePage === "resale"
+                ? "active"
+                : ""
+            }
+            onClick={() =>
+              setActivePage("resale")
+            }
           >
             Resale
           </button>
@@ -616,14 +734,16 @@ function App() {
               <h1>
                 Know Your Car.
                 <br />
-                <span>Know Its Value.</span>
+                <span>
+                  Know Its Value.
+                </span>
               </h1>
 
               <p>
-                CarValue AI combines machine learning,
-                smart recommendations and automotive
-                intelligence to help you make better
-                car decisions.
+                CarValue AI combines machine
+                learning, smart recommendations
+                and automotive intelligence to help
+                you make better car decisions.
               </p>
 
               <div className="hero-actions">
@@ -666,8 +786,13 @@ function App() {
               <div className="car-visual-card">
 
                 <div className="car-visual-top">
-                  <span>AI VALUATION</span>
-                  <span>● LIVE</span>
+                  <span>
+                    AI VALUATION
+                  </span>
+
+                  <span>
+                    ● LIVE
+                  </span>
                 </div>
 
                 <div className="car-visual-car">
@@ -683,9 +808,17 @@ function App() {
                 </div>
 
                 <div className="visual-tags">
-                  <span>AI Model</span>
-                  <span>Used Car</span>
-                  <span>Smart Valuation</span>
+                  <span>
+                    AI Model
+                  </span>
+
+                  <span>
+                    Used Car
+                  </span>
+
+                  <span>
+                    Smart Valuation
+                  </span>
                 </div>
 
               </div>
@@ -698,7 +831,9 @@ function App() {
 
             <div className="section-heading-center">
 
-              <span>CAR INTELLIGENCE</span>
+              <span>
+                CAR INTELLIGENCE
+              </span>
 
               <h2>
                 Everything you need to understand
@@ -718,80 +853,136 @@ function App() {
                 className="feature-card feature-main"
                 onClick={openPrediction}
               >
-                <span className="feature-icon">₹</span>
+                <span className="feature-icon">
+                  ₹
+                </span>
+
                 <span className="feature-label">
                   PRICE ENGINE
                 </span>
-                <h3>Predict Car Price</h3>
+
+                <h3>
+                  Predict Car Price
+                </h3>
+
                 <p>
                   Get an ML-powered estimated
                   market price from vehicle details.
                 </p>
-                <strong>Start valuation →</strong>
+
+                <strong>
+                  Start valuation →
+                </strong>
               </button>
 
               <button
                 className="feature-card"
                 onClick={openFindCar}
               >
-                <span className="feature-icon">🎯</span>
+                <span className="feature-icon">
+                  🎯
+                </span>
+
                 <span className="feature-label">
                   SMART SEARCH
                 </span>
-                <h3>Find My Best Car</h3>
+
+                <h3>
+                  Find My Best Car
+                </h3>
+
                 <p>
                   Discover cars based on your
                   budget and lifestyle.
                 </p>
-                <strong>Find cars →</strong>
+
+                <strong>
+                  Find cars →
+                </strong>
               </button>
 
               <button
                 className="feature-card"
-                onClick={() => setActivePage("compare")}
+                onClick={() =>
+                  setActivePage("compare")
+                }
               >
-                <span className="feature-icon">⚖️</span>
+                <span className="feature-icon">
+                  ⚖️
+                </span>
+
                 <span className="feature-label">
                   DECISION ENGINE
                 </span>
-                <h3>Compare Cars</h3>
+
+                <h3>
+                  Compare Cars
+                </h3>
+
                 <p>
                   Compare prices, specifications,
                   mileage and more.
                 </p>
-                <strong>Compare →</strong>
+
+                <strong>
+                  Compare →
+                </strong>
               </button>
 
               <button
                 className="feature-card"
-                onClick={() => setActivePage("resale")}
+                onClick={() =>
+                  setActivePage("resale")
+                }
               >
-                <span className="feature-icon">🔮</span>
+                <span className="feature-icon">
+                  🔮
+                </span>
+
                 <span className="feature-label">
                   FUTURE VALUE
                 </span>
-                <h3>Future Resale</h3>
+
+                <h3>
+                  Future Resale
+                </h3>
+
                 <p>
                   Estimate how your car value may
                   change over time.
                 </p>
-                <strong>Explore resale →</strong>
+
+                <strong>
+                  Explore resale →
+                </strong>
               </button>
 
               <button
                 className="feature-card"
-                onClick={() => setActivePage("dashboard")}
+                onClick={() =>
+                  setActivePage("dashboard")
+                }
               >
-                <span className="feature-icon">📊</span>
+                <span className="feature-icon">
+                  📊
+                </span>
+
                 <span className="feature-label">
                   MY GARAGE
                 </span>
-                <h3>My Dashboard</h3>
+
+                <h3>
+                  My Dashboard
+                </h3>
+
                 <p>
                   View your analyses, predictions
                   and comparison activity.
                 </p>
-                <strong>Open dashboard →</strong>
+
+                <strong>
+                  Open dashboard →
+                </strong>
               </button>
 
             </div>
@@ -813,8 +1004,14 @@ function App() {
           <div className="page-heading">
 
             <div>
-              <span>MY GARAGE</span>
-              <h1>CarValue Dashboard</h1>
+              <span>
+                MY GARAGE
+              </span>
+
+              <h1>
+                CarValue Dashboard
+              </h1>
+
               <p>
                 Your car analysis and valuation
                 workspace.
@@ -833,7 +1030,9 @@ function App() {
           <div className="dashboard-stats">
 
             <div className="dashboard-stat">
-              <span>SELECTED CAR</span>
+              <span>
+                SELECTED CAR
+              </span>
 
               <strong>
                 {predictionForm.brand
@@ -842,12 +1041,15 @@ function App() {
               </strong>
 
               <small>
-                {predictionForm.variant || "Start an analysis"}
+                {predictionForm.variant ||
+                  "Start an analysis"}
               </small>
             </div>
 
             <div className="dashboard-stat">
-              <span>PREDICTED PRICE</span>
+              <span>
+                PREDICTED PRICE
+              </span>
 
               <strong>
                 {predictionResult
@@ -857,11 +1059,15 @@ function App() {
                   : "—"}
               </strong>
 
-              <small>ML estimated value</small>
+              <small>
+                ML estimated value
+              </small>
             </div>
 
             <div className="dashboard-stat">
-              <span>FUTURE RESALE</span>
+              <span>
+                FUTURE RESALE
+              </span>
 
               <strong>
                 {resaleResult
@@ -871,15 +1077,23 @@ function App() {
                   : "—"}
               </strong>
 
-              <small>Estimated future value</small>
+              <small>
+                Estimated future value
+              </small>
             </div>
 
             <div className="dashboard-stat">
-              <span>COMPARE LIST</span>
+              <span>
+                COMPARE LIST
+              </span>
 
-              <strong>{compareCars.length}</strong>
+              <strong>
+                {compareCars.length}
+              </strong>
 
-              <small>Cars selected</small>
+              <small>
+                Cars selected
+              </small>
             </div>
 
           </div>
@@ -891,7 +1105,9 @@ function App() {
               <div className="card-heading">
 
                 <div>
-                  <span>MY CAR ANALYSIS</span>
+                  <span>
+                    MY CAR ANALYSIS
+                  </span>
 
                   <h2>
                     {predictionForm.brand
@@ -925,18 +1141,23 @@ function App() {
                   <div className="analysis-grid">
 
                     <div>
-                      <span>Model Accuracy</span>
+                      <span>
+                        Model Accuracy
+                      </span>
 
                       <strong>
                         {(
-                          predictionResult.r2_score * 100
+                          predictionResult.r2_score *
+                          100
                         ).toFixed(1)}
                         %
                       </strong>
                     </div>
 
                     <div>
-                      <span>Year</span>
+                      <span>
+                        Year
+                      </span>
 
                       <strong>
                         {predictionForm.year}
@@ -944,7 +1165,9 @@ function App() {
                     </div>
 
                     <div>
-                      <span>Distance</span>
+                      <span>
+                        Distance
+                      </span>
 
                       <strong>
                         {formatDistance(
@@ -954,7 +1177,9 @@ function App() {
                     </div>
 
                     <div>
-                      <span>Fuel</span>
+                      <span>
+                        Fuel
+                      </span>
 
                       <strong>
                         {predictionForm.fuel}
@@ -969,7 +1194,9 @@ function App() {
 
                 <div className="empty-analysis">
 
-                  <div>🚘</div>
+                  <div>
+                    🚘
+                  </div>
 
                   <h3>
                     Your car analysis will appear here
@@ -1000,8 +1227,13 @@ function App() {
             <div className="card-heading">
 
               <div>
-                <span>ACTIVITY</span>
-                <h2>Recent Analyses</h2>
+                <span>
+                  ACTIVITY
+                </span>
+
+                <h2>
+                  Recent Analyses
+                </h2>
               </div>
 
             </div>
@@ -1034,7 +1266,8 @@ function App() {
                       </strong>
 
                       <span>
-                        {item.variant} • {item.date}
+                        {item.variant} •{" "}
+                        {item.date}
                       </span>
 
                     </div>
@@ -1070,9 +1303,13 @@ function App() {
           <div className="page-heading">
 
             <div>
-              <span>SMART CAR SELECTION</span>
+              <span>
+                SMART CAR SELECTION
+              </span>
 
-              <h1>Find My Best Car</h1>
+              <h1>
+                Find My Best Car
+              </h1>
 
               <p>
                 Tell us what you need and discover
@@ -1109,11 +1346,15 @@ function App() {
 
               <div className="field">
 
-                <label>Maximum Budget</label>
+                <label>
+                  Maximum Budget
+                </label>
 
                 <div className="input-with-prefix">
 
-                  <span>₹</span>
+                  <span>
+                    ₹
+                  </span>
 
                   <input
                     type="number"
@@ -1132,7 +1373,9 @@ function App() {
 
               <div className="field">
 
-                <label>Fuel Preference</label>
+                <label>
+                  Fuel Preference
+                </label>
 
                 <select
                   value={recommendForm.fuel}
@@ -1165,10 +1408,14 @@ function App() {
 
               <div className="field">
 
-                <label>Transmission</label>
+                <label>
+                  Transmission
+                </label>
 
                 <select
-                  value={recommendForm.transmission}
+                  value={
+                    recommendForm.transmission
+                  }
                   onChange={(e) =>
                     handleRecommendChange(
                       "transmission",
@@ -1200,13 +1447,17 @@ function App() {
 
               <div className="field">
 
-                <label>Maximum Kilometers</label>
+                <label>
+                  Maximum Kilometers
+                </label>
 
                 <div className="input-with-suffix">
 
                   <input
                     type="number"
-                    value={recommendForm.max_distance}
+                    value={
+                      recommendForm.max_distance
+                    }
                     onChange={(e) =>
                       handleRecommendChange(
                         "max_distance",
@@ -1216,7 +1467,9 @@ function App() {
                     placeholder="50000"
                   />
 
-                  <span>km</span>
+                  <span>
+                    km
+                  </span>
 
                 </div>
 
@@ -1224,13 +1477,17 @@ function App() {
 
               <div className="field">
 
-                <label>Minimum Mileage</label>
+                <label>
+                  Minimum Mileage
+                </label>
 
                 <div className="input-with-suffix">
 
                   <input
                     type="number"
-                    value={recommendForm.mileage}
+                    value={
+                      recommendForm.mileage
+                    }
                     onChange={(e) =>
                       handleRecommendChange(
                         "mileage",
@@ -1240,7 +1497,9 @@ function App() {
                     placeholder="15"
                   />
 
-                  <span>km/l</span>
+                  <span>
+                    km/l
+                  </span>
 
                 </div>
 
@@ -1248,10 +1507,14 @@ function App() {
 
               <div className="field">
 
-                <label>Family Size</label>
+                <label>
+                  Family Size
+                </label>
 
                 <select
-                  value={recommendForm.seats}
+                  value={
+                    recommendForm.seats
+                  }
                   onChange={(e) =>
                     handleRecommendChange(
                       "seats",
@@ -1281,10 +1544,14 @@ function App() {
 
               <div className="field">
 
-                <label>Performance Preference</label>
+                <label>
+                  Performance Preference
+                </label>
 
                 <select
-                  value={recommendForm.performance}
+                  value={
+                    recommendForm.performance
+                  }
                   onChange={(e) =>
                     handleRecommendChange(
                       "performance",
@@ -1293,10 +1560,21 @@ function App() {
                   }
                 >
 
-                  <option>Balanced</option>
-                  <option>Economy</option>
-                  <option>Performance</option>
-                  <option>Premium</option>
+                  <option>
+                    Balanced
+                  </option>
+
+                  <option>
+                    Economy
+                  </option>
+
+                  <option>
+                    Performance
+                  </option>
+
+                  <option>
+                    Premium
+                  </option>
 
                 </select>
 
@@ -1304,10 +1582,14 @@ function App() {
 
               <div className="field">
 
-                <label>Car Condition</label>
+                <label>
+                  Car Condition
+                </label>
 
                 <select
-                  value={recommendForm.condition}
+                  value={
+                    recommendForm.condition
+                  }
                   onChange={(e) =>
                     handleRecommendChange(
                       "condition",
@@ -1316,9 +1598,17 @@ function App() {
                   }
                 >
 
-                  <option>Used</option>
-                  <option>New</option>
-                  <option>Either</option>
+                  <option>
+                    Used
+                  </option>
+
+                  <option>
+                    New
+                  </option>
+
+                  <option>
+                    Either
+                  </option>
 
                 </select>
 
@@ -1326,13 +1616,17 @@ function App() {
 
               <div className="field">
 
-                <label>Maximum Car Age</label>
+                <label>
+                  Maximum Car Age
+                </label>
 
                 <div className="input-with-suffix">
 
                   <input
                     type="number"
-                    value={recommendForm.max_age}
+                    value={
+                      recommendForm.max_age
+                    }
                     onChange={(e) =>
                       handleRecommendChange(
                         "max_age",
@@ -1342,7 +1636,9 @@ function App() {
                     placeholder="5"
                   />
 
-                  <span>years</span>
+                  <span>
+                    years
+                  </span>
 
                 </div>
 
@@ -1380,7 +1676,9 @@ function App() {
 
                 <div>
 
-                  <span>MATCHED VEHICLES</span>
+                  <span>
+                    MATCHED VEHICLES
+                  </span>
 
                   <h2>
                     Cars selected for you
@@ -1402,8 +1700,10 @@ function App() {
                     const isCompared =
                       compareCars.some(
                         (item) =>
-                          item.title === car.title &&
-                          item.year === car.year &&
+                          item.title ===
+                            car.title &&
+                          item.year ===
+                            car.year &&
                           item.actual_price ===
                             car.actual_price
                       );
@@ -1430,6 +1730,7 @@ function App() {
                             {Math.round(
                               car.match_score
                             )}
+
                             % MATCH
 
                           </span>
@@ -1442,7 +1743,9 @@ function App() {
                             {car.brand}
                           </span>
 
-                          <h3>{car.title}</h3>
+                          <h3>
+                            {car.title}
+                          </h3>
 
                           <div className="new-car-price">
                             {formatPrice(
@@ -1468,7 +1771,8 @@ function App() {
                             </span>
 
                             <span>
-                              ⚙️ {car.transmission}
+                              ⚙️{" "}
+                              {car.transmission}
                             </span>
 
                           </div>
@@ -1532,9 +1836,13 @@ function App() {
 
             <div>
 
-              <span>AI PRICE ENGINE</span>
+              <span>
+                AI PRICE ENGINE
+              </span>
 
-              <h1>Predict Car Price</h1>
+              <h1>
+                Predict Car Price
+              </h1>
 
               <p>
                 Estimate the market value of a used
@@ -1551,7 +1859,9 @@ function App() {
 
               <div>
 
-                <span>ML VALUATION ENGINE</span>
+                <span>
+                  ML VALUATION ENGINE
+                </span>
 
                 <h2>
                   Tell us about your car
@@ -1576,10 +1886,14 @@ function App() {
 
                 <div className="field">
 
-                  <label>Brand</label>
+                  <label>
+                    Brand
+                  </label>
 
                   <select
-                    value={predictionForm.brand}
+                    value={
+                      predictionForm.brand
+                    }
                     onChange={(e) =>
                       handleBrandChange(
                         e.target.value
@@ -1591,16 +1905,18 @@ function App() {
                       Select Brand
                     </option>
 
-                    {options.brands.map((brand) => (
+                    {options.brands.map(
+                      (brand) => (
 
-                      <option
-                        key={brand}
-                        value={brand}
-                      >
-                        {brand}
-                      </option>
+                        <option
+                          key={brand}
+                          value={brand}
+                        >
+                          {brand}
+                        </option>
 
-                    ))}
+                      )
+                    )}
 
                   </select>
 
@@ -1608,11 +1924,17 @@ function App() {
 
                 <div className="field">
 
-                  <label>Model</label>
+                  <label>
+                    Model
+                  </label>
 
                   <select
-                    value={predictionForm.model}
-                    disabled={!predictionForm.brand}
+                    value={
+                      predictionForm.model
+                    }
+                    disabled={
+                      !predictionForm.brand
+                    }
                     onChange={(e) =>
                       handleModelChange(
                         e.target.value
@@ -1624,16 +1946,18 @@ function App() {
                       Select Model
                     </option>
 
-                    {availableModels.map((model) => (
+                    {availableModels.map(
+                      (model) => (
 
-                      <option
-                        key={model}
-                        value={model}
-                      >
-                        {model}
-                      </option>
+                        <option
+                          key={model}
+                          value={model}
+                        >
+                          {model}
+                        </option>
 
-                    ))}
+                      )
+                    )}
 
                   </select>
 
@@ -1641,11 +1965,17 @@ function App() {
 
                 <div className="field">
 
-                  <label>Variant</label>
+                  <label>
+                    Variant
+                  </label>
 
                   <select
-                    value={predictionForm.variant}
-                    disabled={!predictionForm.model}
+                    value={
+                      predictionForm.variant
+                    }
+                    disabled={
+                      !predictionForm.model
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "variant",
@@ -1677,13 +2007,17 @@ function App() {
 
                 <div className="field">
 
-                  <label>Manufacturing Year</label>
+                  <label>
+                    Manufacturing Year
+                  </label>
 
                   <input
                     type="number"
                     min="1990"
                     max="2026"
-                    value={predictionForm.year}
+                    value={
+                      predictionForm.year
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "year",
@@ -1696,14 +2030,18 @@ function App() {
 
                 <div className="field">
 
-                  <label>Distance Driven</label>
+                  <label>
+                    Distance Driven
+                  </label>
 
                   <div className="input-with-suffix">
 
                     <input
                       type="number"
                       min="0"
-                      value={predictionForm.distance}
+                      value={
+                        predictionForm.distance
+                      }
                       onChange={(e) =>
                         handlePredictionChange(
                           "distance",
@@ -1712,7 +2050,9 @@ function App() {
                       }
                     />
 
-                    <span>km</span>
+                    <span>
+                      km
+                    </span>
 
                   </div>
 
@@ -1720,14 +2060,18 @@ function App() {
 
                 <div className="field">
 
-                  <label>Engine Capacity</label>
+                  <label>
+                    Engine Capacity
+                  </label>
 
                   <div className="input-with-suffix">
 
                     <input
                       type="number"
                       min="500"
-                      value={predictionForm.engine_cc}
+                      value={
+                        predictionForm.engine_cc
+                      }
                       onChange={(e) =>
                         handlePredictionChange(
                           "engine_cc",
@@ -1736,7 +2080,9 @@ function App() {
                       }
                     />
 
-                    <span>cc</span>
+                    <span>
+                      cc
+                    </span>
 
                   </div>
 
@@ -1744,7 +2090,9 @@ function App() {
 
                 <div className="field">
 
-                  <label>Mileage</label>
+                  <label>
+                    Mileage
+                  </label>
 
                   <div className="input-with-suffix">
 
@@ -1752,7 +2100,9 @@ function App() {
                       type="number"
                       min="0"
                       step="0.1"
-                      value={predictionForm.mileage}
+                      value={
+                        predictionForm.mileage
+                      }
                       onChange={(e) =>
                         handlePredictionChange(
                           "mileage",
@@ -1761,7 +2111,9 @@ function App() {
                       }
                     />
 
-                    <span>km/l</span>
+                    <span>
+                      km/l
+                    </span>
 
                   </div>
 
@@ -1769,10 +2121,14 @@ function App() {
 
                 <div className="field">
 
-                  <label>Seats</label>
+                  <label>
+                    Seats
+                  </label>
 
                   <select
-                    value={predictionForm.seats}
+                    value={
+                      predictionForm.seats
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "seats",
@@ -1781,16 +2137,18 @@ function App() {
                     }
                   >
 
-                    {options.seats.map((seat) => (
+                    {options.seats.map(
+                      (seat) => (
 
-                      <option
-                        key={seat}
-                        value={seat}
-                      >
-                        {seat} Seats
-                      </option>
+                        <option
+                          key={seat}
+                          value={seat}
+                        >
+                          {seat} Seats
+                        </option>
 
-                    ))}
+                      )
+                    )}
 
                   </select>
 
@@ -1798,10 +2156,14 @@ function App() {
 
                 <div className="field">
 
-                  <label>Fuel Type</label>
+                  <label>
+                    Fuel Type
+                  </label>
 
                   <select
-                    value={predictionForm.fuel}
+                    value={
+                      predictionForm.fuel
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "fuel",
@@ -1814,16 +2176,18 @@ function App() {
                       Select Fuel
                     </option>
 
-                    {options.fuels.map((fuel) => (
+                    {options.fuels.map(
+                      (fuel) => (
 
-                      <option
-                        key={fuel}
-                        value={fuel}
-                      >
-                        {fuel}
-                      </option>
+                        <option
+                          key={fuel}
+                          value={fuel}
+                        >
+                          {fuel}
+                        </option>
 
-                    ))}
+                      )
+                    )}
 
                   </select>
 
@@ -1831,10 +2195,14 @@ function App() {
 
                 <div className="field">
 
-                  <label>Transmission</label>
+                  <label>
+                    Transmission
+                  </label>
 
                   <select
-                    value={predictionForm.transmission}
+                    value={
+                      predictionForm.transmission
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "transmission",
@@ -1866,10 +2234,14 @@ function App() {
 
                 <div className="field">
 
-                  <label>Ownership</label>
+                  <label>
+                    Ownership
+                  </label>
 
                   <select
-                    value={predictionForm.owner}
+                    value={
+                      predictionForm.owner
+                    }
                     onChange={(e) =>
                       handlePredictionChange(
                         "owner",
@@ -1882,16 +2254,18 @@ function App() {
                       Select Owner
                     </option>
 
-                    {options.owners.map((owner) => (
+                    {options.owners.map(
+                      (owner) => (
 
-                      <option
-                        key={owner}
-                        value={owner}
-                      >
-                        {owner}
-                      </option>
+                        <option
+                          key={owner}
+                          value={owner}
+                        >
+                          {owner}
+                        </option>
 
-                    ))}
+                      )
+                    )}
 
                   </select>
 
@@ -1947,18 +2321,22 @@ function App() {
 
                   <p>
                     Estimated using the trained
-                    CarValue AI machine-learning model.
+                    CarValue AI machine-learning
+                    model.
                   </p>
 
                 </div>
 
                 <div className="prediction-confidence">
 
-                  <span>MODEL R²</span>
+                  <span>
+                    MODEL R²
+                  </span>
 
                   <strong>
                     {(
-                      predictionResult.r2_score * 100
+                      predictionResult.r2_score *
+                      100
                     ).toFixed(2)}
                     %
                   </strong>
@@ -1991,7 +2369,9 @@ function App() {
 
                   <button
                     onClick={() =>
-                      setActivePage("dashboard")
+                      setActivePage(
+                        "dashboard"
+                      )
                     }
                   >
                     📊 View Dashboard
@@ -2021,9 +2401,13 @@ function App() {
 
             <div>
 
-              <span>DECISION ENGINE</span>
+              <span>
+                DECISION ENGINE
+              </span>
 
-              <h1>Compare Cars</h1>
+              <h1>
+                Compare Cars
+              </h1>
 
               <p>
                 Compare up to three shortlisted
@@ -2045,7 +2429,9 @@ function App() {
 
             <section className="empty-feature-card">
 
-              <div>⚖️</div>
+              <div>
+                ⚖️
+              </div>
 
               <h2>
                 Your comparison is empty
@@ -2076,7 +2462,9 @@ function App() {
                 </span>
 
                 <button
-                  onClick={() => setCompareCars([])}
+                  onClick={() =>
+                    setCompareCars([])
+                  }
                 >
                   Clear All
                 </button>
@@ -2085,43 +2473,45 @@ function App() {
 
               <div className="compare-grid">
 
-                {compareCars.map((car, index) => (
+                {compareCars.map(
+                  (car, index) => (
 
-                  <div
-                    className="compare-column"
-                    key={`${car.title}-${index}`}
-                  >
+                    <div
+                      className="compare-column"
+                      key={`${car.title}-${index}`}
+                    >
 
-                    <div className="compare-car-visual">
-                      🚘
+                      <div className="compare-car-visual">
+                        🚘
+                      </div>
+
+                      <span>
+                        {car.brand}
+                      </span>
+
+                      <h3>
+                        {car.title}
+                      </h3>
+
+                      <strong className="compare-price">
+                        {formatPrice(
+                          car.actual_price
+                        )}
+                      </strong>
+
+                      <button
+                        className="remove-compare"
+                        onClick={() =>
+                          toggleCompare(car)
+                        }
+                      >
+                        Remove
+                      </button>
+
                     </div>
 
-                    <span>
-                      {car.brand}
-                    </span>
-
-                    <h3>
-                      {car.title}
-                    </h3>
-
-                    <strong className="compare-price">
-                      {formatPrice(
-                        car.actual_price
-                      )}
-                    </strong>
-
-                    <button
-                      className="remove-compare"
-                      onClick={() =>
-                        toggleCompare(car)
-                      }
-                    >
-                      Remove
-                    </button>
-
-                  </div>
-
-                ))}
+                  )
+                )}
 
               </div>
 
@@ -2129,15 +2519,19 @@ function App() {
 
                 <div className="comparison-row comparison-label-row">
 
-                  <span>Specification</span>
+                  <span>
+                    Specification
+                  </span>
 
-                  {compareCars.map((car, index) => (
+                  {compareCars.map(
+                    (car, index) => (
 
-                    <strong key={index}>
-                      Car {index + 1}
-                    </strong>
+                      <strong key={index}>
+                        Car {index + 1}
+                      </strong>
 
-                  ))}
+                    )
+                  )}
 
                 </div>
 
@@ -2145,42 +2539,50 @@ function App() {
                   ["Year", "year"],
                   ["Mileage", "mileage"],
                   ["Fuel", "fuel"],
-                  ["Transmission", "transmission"],
+                  [
+                    "Transmission",
+                    "transmission",
+                  ],
                   ["Distance", "distance"],
                   ["Seats", "seats"],
                   ["Owner", "owner"],
-                ].map(([label, key]) => (
+                ].map(
+                  ([label, key]) => (
 
-                  <div
-                    className="comparison-row"
-                    key={key}
-                  >
+                    <div
+                      className="comparison-row"
+                      key={key}
+                    >
 
-                    <span>{label}</span>
+                      <span>
+                        {label}
+                      </span>
 
-                    {compareCars.map(
-                      (car, index) => (
+                      {compareCars.map(
+                        (car, index) => (
 
-                        <strong key={index}>
+                          <strong key={index}>
 
-                          {key === "distance"
-                            ? formatDistance(
-                                car[key]
-                              )
-                            : key === "mileage"
-                            ? car[key]
-                              ? `${car[key]} km/l`
-                              : "N/A"
-                            : car[key] || "N/A"}
+                            {key === "distance"
+                              ? formatDistance(
+                                  car[key]
+                                )
+                              : key === "mileage"
+                              ? car[key]
+                                ? `${car[key]} km/l`
+                                : "N/A"
+                              : car[key] ||
+                                "N/A"}
 
-                        </strong>
+                          </strong>
 
-                      )
-                    )}
+                        )
+                      )}
 
-                  </div>
+                    </div>
 
-                ))}
+                  )
+                )}
 
                 <div className="comparison-row">
 
@@ -2229,9 +2631,13 @@ function App() {
 
             <div>
 
-              <span>FUTURE VALUE ENGINE</span>
+              <span>
+                FUTURE VALUE ENGINE
+              </span>
 
-              <h1>Future Resale Predictor</h1>
+              <h1>
+                Future Resale Predictor
+              </h1>
 
               <p>
                 Estimate how your car's value may
@@ -2267,17 +2673,23 @@ function App() {
 
                 <div className="input-with-prefix">
 
-                  <span>₹</span>
+                  <span>
+                    ₹
+                  </span>
 
                   <input
                     type="number"
-                    value={resaleForm.currentValue}
+                    value={
+                      resaleForm.currentValue
+                    }
                     onChange={(e) =>
-                      setResaleForm((prev) => ({
-                        ...prev,
-                        currentValue:
-                          e.target.value,
-                      }))
+                      setResaleForm(
+                        (prev) => ({
+                          ...prev,
+                          currentValue:
+                            e.target.value,
+                        })
+                      )
                     }
                   />
 
@@ -2292,13 +2704,19 @@ function App() {
                 </label>
 
                 <select
-                  value={resaleForm.ownershipYears}
+                  value={
+                    resaleForm.ownershipYears
+                  }
                   onChange={(e) =>
-                    setResaleForm((prev) => ({
-                      ...prev,
-                      ownershipYears:
-                        Number(e.target.value),
-                    }))
+                    setResaleForm(
+                      (prev) => ({
+                        ...prev,
+                        ownershipYears:
+                          Number(
+                            e.target.value
+                          ),
+                      })
+                    )
                   }
                 >
 
@@ -2345,7 +2763,9 @@ function App() {
 
                 <div className="resale-empty">
 
-                  <div>📈</div>
+                  <div>
+                    📈
+                  </div>
 
                   <h3>
                     Your resale projection
@@ -2422,7 +2842,9 @@ function App() {
 
                     <div className="chart-years">
 
-                      <span>Today</span>
+                      <span>
+                        Today
+                      </span>
 
                       <span>
                         Mid ownership
@@ -2511,7 +2933,9 @@ function App() {
 
         <div
           className="car-details-overlay"
-          onClick={() => setSelectedCar(null)}
+          onClick={() =>
+            setSelectedCar(null)
+          }
         >
 
           <div
@@ -2557,7 +2981,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Model</small>
+                <small>
+                  Model
+                </small>
 
                 <strong>
                   {selectedCar.model}
@@ -2567,7 +2993,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Variant</small>
+                <small>
+                  Variant
+                </small>
 
                 <strong>
                   {selectedCar.variant ||
@@ -2578,7 +3006,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Year</small>
+                <small>
+                  Year
+                </small>
 
                 <strong>
                   {selectedCar.year}
@@ -2588,7 +3018,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Distance</small>
+                <small>
+                  Distance
+                </small>
 
                 <strong>
                   {formatDistance(
@@ -2600,7 +3032,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Fuel</small>
+                <small>
+                  Fuel
+                </small>
 
                 <strong>
                   {selectedCar.fuel}
@@ -2610,7 +3044,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Transmission</small>
+                <small>
+                  Transmission
+                </small>
 
                 <strong>
                   {selectedCar.transmission}
@@ -2620,7 +3056,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Mileage</small>
+                <small>
+                  Mileage
+                </small>
 
                 <strong>
                   {selectedCar.mileage
@@ -2632,7 +3070,9 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Owner</small>
+                <small>
+                  Owner
+                </small>
 
                 <strong>
                   {selectedCar.owner}
@@ -2642,17 +3082,22 @@ function App() {
 
               <div className="modal-detail">
 
-                <small>Seats</small>
+                <small>
+                  Seats
+                </small>
 
                 <strong>
-                  {selectedCar.seats || "N/A"}
+                  {selectedCar.seats ||
+                    "N/A"}
                 </strong>
 
               </div>
 
               <div className="modal-detail">
 
-                <small>Match Score</small>
+                <small>
+                  Match Score
+                </small>
 
                 <strong>
 
