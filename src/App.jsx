@@ -82,19 +82,6 @@ function App() {
   const [resaleResult, setResaleResult] = useState(null);
 
   // ============================================================
-  // CHATBOT UI
-  // ============================================================
-
-  const [chatMessages, setChatMessages] = useState([
-    {
-      role: "bot",
-      text: "Hi! I'm CarValue AI Assistant. Ask me about car prices, recommendations, comparison or resale value.",
-    },
-  ]);
-
-  const [chatInput, setChatInput] = useState("");
-
-  // ============================================================
   // LOAD OPTIONS
   // ============================================================
 
@@ -113,6 +100,7 @@ function App() {
         setOptions(data);
 
         const firstBrand = data.brands?.[0] || "";
+
         const firstModel =
           data.brand_models?.[firstBrand]?.[0] || "";
 
@@ -141,6 +129,30 @@ function App() {
     };
 
     loadOptions();
+  }, []);
+
+  // ============================================================
+  // JOTFORM AI CHATBOT
+  // ============================================================
+
+  useEffect(() => {
+    const SCRIPT_SRC =
+      "https://cdn.jotfor.ms/agent/embedjs/01a0fcdc291070008e4c2016446d7a79dfac/embed.js";
+
+    const existingScript = document.querySelector(
+      `script[src="${SCRIPT_SRC}"]`
+    );
+
+    if (existingScript) {
+      return;
+    }
+
+    const script = document.createElement("script");
+
+    script.src = SCRIPT_SRC;
+    script.async = true;
+
+    document.body.appendChild(script);
   }, []);
 
   // ============================================================
@@ -192,13 +204,8 @@ function App() {
     const current = Number(value) || 0;
     const period = Number(years) || 0;
 
-    /*
-      Simple estimated depreciation projection.
-      This is intentionally presented as an estimate,
-      not a guaranteed future market price.
-    */
-
     const annualRate = 0.105;
+
     const futureValue =
       current * Math.pow(1 - annualRate, period);
 
@@ -233,6 +240,7 @@ function App() {
 
   const handleBrandChange = (brand) => {
     const models = options.brand_models?.[brand] || [];
+
     const firstModel = models[0] || "";
 
     const variants =
@@ -329,7 +337,6 @@ function App() {
 
       setRecommendations(data.results || []);
       setActivePage("find");
-
     } catch (error) {
       console.error("Recommendation error:", error);
 
@@ -411,7 +418,6 @@ function App() {
       ].slice(0, 8));
 
       setActivePage("dashboard");
-
     } catch (error) {
       console.error("Prediction error:", error);
 
@@ -482,31 +488,6 @@ function App() {
     }
 
     setCompareCars((prev) => [...prev, car]);
-  };
-
-  // ============================================================
-  // CHATBOT PLACEHOLDER
-  // ============================================================
-
-  const sendChatMessage = () => {
-    const message = chatInput.trim();
-
-    if (!message) return;
-
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        text: message,
-      },
-      {
-        role: "bot",
-        text:
-          "AI Assistant is ready for integration. Your AI backend can be connected here to handle this conversation.",
-      },
-    ]);
-
-    setChatInput("");
   };
 
   // ============================================================
@@ -611,13 +592,6 @@ function App() {
 
         </div>
 
-        <button
-          className="nav-ai-btn"
-          onClick={() => setActivePage("assistant")}
-        >
-          ✨ Ask AI
-        </button>
-
       </nav>
 
       {/* ======================================================
@@ -653,15 +627,6 @@ function App() {
               </p>
 
               <div className="hero-actions">
-
-                <button
-                  className="hero-primary"
-                  onClick={() =>
-                    setActivePage("assistant")
-                  }
-                >
-                  ✨ Start with AI
-                </button>
 
                 <button
                   className="hero-secondary"
@@ -728,8 +693,6 @@ function App() {
             </div>
 
           </section>
-
-          {/* FEATURE SECTION */}
 
           <section className="feature-section">
 
@@ -831,22 +794,6 @@ function App() {
                 <strong>Open dashboard →</strong>
               </button>
 
-              <button
-                className="feature-card ai-feature"
-                onClick={() => setActivePage("assistant")}
-              >
-                <span className="feature-icon">✨</span>
-                <span className="feature-label">
-                  AI ASSISTANT
-                </span>
-                <h3>Talk to CarValue AI</h3>
-                <p>
-                  Your conversational car-buying
-                  assistant.
-                </p>
-                <strong>Ask AI →</strong>
-              </button>
-
             </div>
 
           </section>
@@ -887,11 +834,13 @@ function App() {
 
             <div className="dashboard-stat">
               <span>SELECTED CAR</span>
+
               <strong>
                 {predictionForm.brand
                   ? `${predictionForm.brand} ${predictionForm.model}`
                   : "No car yet"}
               </strong>
+
               <small>
                 {predictionForm.variant || "Start an analysis"}
               </small>
@@ -899,6 +848,7 @@ function App() {
 
             <div className="dashboard-stat">
               <span>PREDICTED PRICE</span>
+
               <strong>
                 {predictionResult
                   ? formatPrice(
@@ -906,11 +856,13 @@ function App() {
                     )
                   : "—"}
               </strong>
+
               <small>ML estimated value</small>
             </div>
 
             <div className="dashboard-stat">
               <span>FUTURE RESALE</span>
+
               <strong>
                 {resaleResult
                   ? formatPrice(
@@ -918,12 +870,15 @@ function App() {
                     )
                   : "—"}
               </strong>
+
               <small>Estimated future value</small>
             </div>
 
             <div className="dashboard-stat">
               <span>COMPARE LIST</span>
+
               <strong>{compareCars.length}</strong>
+
               <small>Cars selected</small>
             </div>
 
@@ -937,6 +892,7 @@ function App() {
 
                 <div>
                   <span>MY CAR ANALYSIS</span>
+
                   <h2>
                     {predictionForm.brand
                       ? `${predictionForm.brand} ${predictionForm.model}`
@@ -955,18 +911,22 @@ function App() {
                 <div className="analysis-result">
 
                   <div className="big-price">
+
                     {formatPrice(
                       predictionResult.predicted_price
                     )}
+
                     <small>
                       Estimated Market Price
                     </small>
+
                   </div>
 
                   <div className="analysis-grid">
 
                     <div>
                       <span>Model Accuracy</span>
+
                       <strong>
                         {(
                           predictionResult.r2_score * 100
@@ -977,6 +937,7 @@ function App() {
 
                     <div>
                       <span>Year</span>
+
                       <strong>
                         {predictionForm.year}
                       </strong>
@@ -984,6 +945,7 @@ function App() {
 
                     <div>
                       <span>Distance</span>
+
                       <strong>
                         {formatDistance(
                           predictionForm.distance
@@ -993,6 +955,7 @@ function App() {
 
                     <div>
                       <span>Fuel</span>
+
                       <strong>
                         {predictionForm.fuel}
                       </strong>
@@ -1030,47 +993,17 @@ function App() {
 
             </section>
 
-            <section className="dashboard-side-card">
-
-              <div className="card-heading">
-                <div>
-                  <span>AI ASSISTANT</span>
-                  <h2>Need help?</h2>
-                </div>
-              </div>
-
-              <div className="mini-ai-box">
-
-                <div className="ai-avatar">
-                  ✨
-                </div>
-
-                <p>
-                  Ask me about prices, finding cars,
-                  comparisons or resale value.
-                </p>
-
-                <button
-                  onClick={() =>
-                    setActivePage("assistant")
-                  }
-                >
-                  Open AI Assistant →
-                </button>
-
-              </div>
-
-            </section>
-
           </div>
 
           <section className="history-card">
 
             <div className="card-heading">
+
               <div>
                 <span>ACTIVITY</span>
                 <h2>Recent Analyses</h2>
               </div>
+
             </div>
 
             {analysisHistory.length === 0 ? (
@@ -1095,6 +1028,7 @@ function App() {
                     </div>
 
                     <div>
+
                       <strong>
                         {item.title}
                       </strong>
@@ -1102,6 +1036,7 @@ function App() {
                       <span>
                         {item.variant} • {item.date}
                       </span>
+
                     </div>
 
                     <strong className="history-price">
@@ -1136,7 +1071,9 @@ function App() {
 
             <div>
               <span>SMART CAR SELECTION</span>
+
               <h1>Find My Best Car</h1>
+
               <p>
                 Tell us what you need and discover
                 matching vehicles.
@@ -1154,6 +1091,7 @@ function App() {
               </div>
 
               <div>
+
                 <h2>
                   Build your perfect car profile
                 </h2>
@@ -1162,6 +1100,7 @@ function App() {
                   The recommendation engine will
                   rank cars based on your preferences.
                 </p>
+
               </div>
 
             </div>
@@ -1169,9 +1108,11 @@ function App() {
             <div className="smart-form-grid">
 
               <div className="field">
+
                 <label>Maximum Budget</label>
 
                 <div className="input-with-prefix">
+
                   <span>₹</span>
 
                   <input
@@ -1184,10 +1125,13 @@ function App() {
                       )
                     }
                   />
+
                 </div>
+
               </div>
 
               <div className="field">
+
                 <label>Fuel Preference</label>
 
                 <select
@@ -1199,19 +1143,28 @@ function App() {
                     )
                   }
                 >
+
                   <option value="">
                     Any Fuel
                   </option>
 
                   {options.fuels.map((fuel) => (
-                    <option key={fuel} value={fuel}>
+
+                    <option
+                      key={fuel}
+                      value={fuel}
+                    >
                       {fuel}
                     </option>
+
                   ))}
+
                 </select>
+
               </div>
 
               <div className="field">
+
                 <label>Transmission</label>
 
                 <select
@@ -1223,27 +1176,34 @@ function App() {
                     )
                   }
                 >
+
                   <option value="">
                     Any Transmission
                   </option>
 
                   {options.transmissions.map(
                     (transmission) => (
+
                       <option
                         key={transmission}
                         value={transmission}
                       >
                         {transmission}
                       </option>
+
                     )
                   )}
+
                 </select>
+
               </div>
 
               <div className="field">
+
                 <label>Maximum Kilometers</label>
 
                 <div className="input-with-suffix">
+
                   <input
                     type="number"
                     value={recommendForm.max_distance}
@@ -1255,14 +1215,19 @@ function App() {
                     }
                     placeholder="50000"
                   />
+
                   <span>km</span>
+
                 </div>
+
               </div>
 
               <div className="field">
+
                 <label>Minimum Mileage</label>
 
                 <div className="input-with-suffix">
+
                   <input
                     type="number"
                     value={recommendForm.mileage}
@@ -1274,11 +1239,15 @@ function App() {
                     }
                     placeholder="15"
                   />
+
                   <span>km/l</span>
+
                 </div>
+
               </div>
 
               <div className="field">
+
                 <label>Family Size</label>
 
                 <select
@@ -1290,19 +1259,28 @@ function App() {
                     )
                   }
                 >
+
                   <option value="">
                     Any Family Size
                   </option>
 
                   {options.seats.map((seat) => (
-                    <option key={seat} value={seat}>
+
+                    <option
+                      key={seat}
+                      value={seat}
+                    >
                       {seat} seats
                     </option>
+
                   ))}
+
                 </select>
+
               </div>
 
               <div className="field">
+
                 <label>Performance Preference</label>
 
                 <select
@@ -1314,14 +1292,18 @@ function App() {
                     )
                   }
                 >
+
                   <option>Balanced</option>
                   <option>Economy</option>
                   <option>Performance</option>
                   <option>Premium</option>
+
                 </select>
+
               </div>
 
               <div className="field">
+
                 <label>Car Condition</label>
 
                 <select
@@ -1333,16 +1315,21 @@ function App() {
                     )
                   }
                 >
+
                   <option>Used</option>
                   <option>New</option>
                   <option>Either</option>
+
                 </select>
+
               </div>
 
               <div className="field">
+
                 <label>Maximum Car Age</label>
 
                 <div className="input-with-suffix">
+
                   <input
                     type="number"
                     value={recommendForm.max_age}
@@ -1354,8 +1341,11 @@ function App() {
                     }
                     placeholder="5"
                   />
+
                   <span>years</span>
+
                 </div>
+
               </div>
 
             </div>
@@ -1365,15 +1355,19 @@ function App() {
               onClick={getRecommendations}
               disabled={recommendLoading}
             >
+
               {recommendLoading
                 ? "Finding Your Cars..."
                 : "🎯 Find My Best Cars"}
+
             </button>
 
             {recommendError && (
+
               <div className="error-message">
                 {recommendError}
               </div>
+
             )}
 
           </section>
@@ -1385,10 +1379,13 @@ function App() {
               <div className="results-heading-new">
 
                 <div>
+
                   <span>MATCHED VEHICLES</span>
+
                   <h2>
                     Cars selected for you
                   </h2>
+
                 </div>
 
                 <div className="result-count-new">
@@ -1412,6 +1409,7 @@ function App() {
                       );
 
                     return (
+
                       <article
                         className="new-car-card"
                         key={`${car.title}-${index}`}
@@ -1428,10 +1426,12 @@ function App() {
                           </span>
 
                           <span className="car-match">
+
                             {Math.round(
                               car.match_score
                             )}
                             % MATCH
+
                           </span>
 
                         </div>
@@ -1493,9 +1493,11 @@ function App() {
                                 toggleCompare(car)
                               }
                             >
+
                               {isCompared
                                 ? "✓ Compared"
                                 : "⚖ Compare"}
+
                             </button>
 
                           </div>
@@ -1503,6 +1505,7 @@ function App() {
                         </div>
 
                       </article>
+
                     );
                   }
                 )}
@@ -1528,12 +1531,16 @@ function App() {
           <div className="page-heading">
 
             <div>
+
               <span>AI PRICE ENGINE</span>
+
               <h1>Predict Car Price</h1>
+
               <p>
                 Estimate the market value of a used
                 car using the trained ML model.
               </p>
+
             </div>
 
           </div>
@@ -1543,6 +1550,7 @@ function App() {
             <div className="prediction-modern-header">
 
               <div>
+
                 <span>ML VALUATION ENGINE</span>
 
                 <h2>
@@ -1553,6 +1561,7 @@ function App() {
                   Select the vehicle and enter its
                   current condition.
                 </p>
+
               </div>
 
               <div className="prediction-big-icon">
@@ -1566,6 +1575,7 @@ function App() {
               <div className="modern-form-grid">
 
                 <div className="field">
+
                   <label>Brand</label>
 
                   <select
@@ -1576,19 +1586,28 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Brand
                     </option>
 
                     {options.brands.map((brand) => (
-                      <option key={brand} value={brand}>
+
+                      <option
+                        key={brand}
+                        value={brand}
+                      >
                         {brand}
                       </option>
+
                     ))}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Model</label>
 
                   <select
@@ -1600,19 +1619,28 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Model
                     </option>
 
                     {availableModels.map((model) => (
-                      <option key={model} value={model}>
+
+                      <option
+                        key={model}
+                        value={model}
+                      >
                         {model}
                       </option>
+
                     ))}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Variant</label>
 
                   <select
@@ -1625,24 +1653,30 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Variant
                     </option>
 
                     {availableVariants.map(
                       (variant) => (
+
                         <option
                           key={variant}
                           value={variant}
                         >
                           {variant}
                         </option>
+
                       )
                     )}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Manufacturing Year</label>
 
                   <input
@@ -1657,12 +1691,15 @@ function App() {
                       )
                     }
                   />
+
                 </div>
 
                 <div className="field">
+
                   <label>Distance Driven</label>
 
                   <div className="input-with-suffix">
+
                     <input
                       type="number"
                       min="0"
@@ -1674,14 +1711,19 @@ function App() {
                         )
                       }
                     />
+
                     <span>km</span>
+
                   </div>
+
                 </div>
 
                 <div className="field">
+
                   <label>Engine Capacity</label>
 
                   <div className="input-with-suffix">
+
                     <input
                       type="number"
                       min="500"
@@ -1693,14 +1735,19 @@ function App() {
                         )
                       }
                     />
+
                     <span>cc</span>
+
                   </div>
+
                 </div>
 
                 <div className="field">
+
                   <label>Mileage</label>
 
                   <div className="input-with-suffix">
+
                     <input
                       type="number"
                       min="0"
@@ -1713,11 +1760,15 @@ function App() {
                         )
                       }
                     />
+
                     <span>km/l</span>
+
                   </div>
+
                 </div>
 
                 <div className="field">
+
                   <label>Seats</label>
 
                   <select
@@ -1729,15 +1780,24 @@ function App() {
                       )
                     }
                   >
+
                     {options.seats.map((seat) => (
-                      <option key={seat} value={seat}>
+
+                      <option
+                        key={seat}
+                        value={seat}
+                      >
                         {seat} Seats
                       </option>
+
                     ))}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Fuel Type</label>
 
                   <select
@@ -1749,19 +1809,28 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Fuel
                     </option>
 
                     {options.fuels.map((fuel) => (
-                      <option key={fuel} value={fuel}>
+
+                      <option
+                        key={fuel}
+                        value={fuel}
+                      >
                         {fuel}
                       </option>
+
                     ))}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Transmission</label>
 
                   <select
@@ -1773,24 +1842,30 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Transmission
                     </option>
 
                     {options.transmissions.map(
                       (transmission) => (
+
                         <option
                           key={transmission}
                           value={transmission}
                         >
                           {transmission}
                         </option>
+
                       )
                     )}
+
                   </select>
+
                 </div>
 
                 <div className="field">
+
                   <label>Ownership</label>
 
                   <select
@@ -1802,24 +1877,34 @@ function App() {
                       )
                     }
                   >
+
                     <option value="">
                       Select Owner
                     </option>
 
                     {options.owners.map((owner) => (
-                      <option key={owner} value={owner}>
+
+                      <option
+                        key={owner}
+                        value={owner}
+                      >
                         {owner}
                       </option>
+
                     ))}
+
                   </select>
+
                 </div>
 
               </div>
 
               {predictionError && (
+
                 <div className="prediction-error">
                   {predictionError}
                 </div>
+
               )}
 
               <button
@@ -1835,9 +1920,11 @@ function App() {
                   !predictionForm.owner
                 }
               >
+
                 {predictionLoading
                   ? "⏳ AI is calculating..."
                   : "₹ Predict My Car Price"}
+
               </button>
 
             </div>
@@ -1847,7 +1934,10 @@ function App() {
               <div className="prediction-success">
 
                 <div>
-                  <span>ESTIMATED MARKET PRICE</span>
+
+                  <span>
+                    ESTIMATED MARKET PRICE
+                  </span>
 
                   <strong>
                     {formatPrice(
@@ -1859,6 +1949,7 @@ function App() {
                     Estimated using the trained
                     CarValue AI machine-learning model.
                   </p>
+
                 </div>
 
                 <div className="prediction-confidence">
@@ -1882,6 +1973,7 @@ function App() {
 
                   <button
                     onClick={() => {
+
                       setResaleForm({
                         currentValue:
                           Math.round(
@@ -1891,6 +1983,7 @@ function App() {
                       });
 
                       setActivePage("resale");
+
                     }}
                   >
                     🔮 Estimate Resale
@@ -1927,12 +2020,16 @@ function App() {
           <div className="page-heading">
 
             <div>
+
               <span>DECISION ENGINE</span>
+
               <h1>Compare Cars</h1>
+
               <p>
                 Compare up to three shortlisted
                 vehicles side by side.
               </p>
+
             </div>
 
             <button
@@ -1973,6 +2070,7 @@ function App() {
             <section className="compare-card">
 
               <div className="compare-header">
+
                 <span>
                   {compareCars.length}/3 SELECTED
                 </span>
@@ -1982,6 +2080,7 @@ function App() {
                 >
                   Clear All
                 </button>
+
               </div>
 
               <div className="compare-grid">
@@ -2029,13 +2128,17 @@ function App() {
               <div className="comparison-table">
 
                 <div className="comparison-row comparison-label-row">
+
                   <span>Specification</span>
 
                   {compareCars.map((car, index) => (
+
                     <strong key={index}>
                       Car {index + 1}
                     </strong>
+
                   ))}
+
                 </div>
 
                 {[
@@ -2057,7 +2160,9 @@ function App() {
 
                     {compareCars.map(
                       (car, index) => (
+
                         <strong key={index}>
+
                           {key === "distance"
                             ? formatDistance(
                                 car[key]
@@ -2067,7 +2172,9 @@ function App() {
                               ? `${car[key]} km/l`
                               : "N/A"
                             : car[key] || "N/A"}
+
                         </strong>
+
                       )
                     )}
 
@@ -2076,20 +2183,28 @@ function App() {
                 ))}
 
                 <div className="comparison-row">
-                  <span>Estimated Resale</span>
+
+                  <span>
+                    Estimated Resale
+                  </span>
 
                   {compareCars.map(
                     (car, index) => (
+
                       <strong key={index}>
+
                         {formatPrice(
                           getResaleEstimate(
                             car.actual_price,
                             3
                           )
                         )}
+
                       </strong>
+
                     )
                   )}
+
                 </div>
 
               </div>
@@ -2113,12 +2228,16 @@ function App() {
           <div className="page-heading">
 
             <div>
+
               <span>FUTURE VALUE ENGINE</span>
+
               <h1>Future Resale Predictor</h1>
+
               <p>
                 Estimate how your car's value may
                 change over your ownership period.
               </p>
+
             </div>
 
           </div>
@@ -2147,6 +2266,7 @@ function App() {
                 </label>
 
                 <div className="input-with-prefix">
+
                   <span>₹</span>
 
                   <input
@@ -2160,6 +2280,7 @@ function App() {
                       }))
                     }
                   />
+
                 </div>
 
               </div>
@@ -2180,6 +2301,7 @@ function App() {
                     }))
                   }
                 >
+
                   <option value={1}>
                     1 Year
                   </option>
@@ -2203,6 +2325,7 @@ function App() {
                   <option value={7}>
                     7 Years
                   </option>
+
                 </select>
 
               </div>
@@ -2240,6 +2363,7 @@ function App() {
                 <>
 
                   <div className="resale-result-header">
+
                     <span>
                       ESTIMATED FUTURE VALUE
                     </span>
@@ -2254,6 +2378,7 @@ function App() {
                       After{" "}
                       {resaleResult.years} years
                     </p>
+
                   </div>
 
                   <div className="resale-chart">
@@ -2261,14 +2386,17 @@ function App() {
                     <div className="chart-line">
 
                       <div className="chart-point point-start">
+
                         <span>
                           {formatPrice(
                             resaleResult.currentValue
                           )}
                         </span>
+
                       </div>
 
                       <div className="chart-point point-mid">
+
                         <span>
                           {formatPrice(
                             Math.round(
@@ -2277,27 +2405,34 @@ function App() {
                             )
                           )}
                         </span>
+
                       </div>
 
                       <div className="chart-point point-end">
+
                         <span>
                           {formatPrice(
                             resaleResult.futureValue
                           )}
                         </span>
+
                       </div>
 
                     </div>
 
                     <div className="chart-years">
+
                       <span>Today</span>
+
                       <span>
                         Mid ownership
                       </span>
+
                       <span>
                         Year{" "}
                         {resaleResult.years}
                       </span>
+
                     </div>
 
                   </div>
@@ -2305,38 +2440,55 @@ function App() {
                   <div className="resale-metrics">
 
                     <div>
-                      <span>Current Value</span>
+
+                      <span>
+                        Current Value
+                      </span>
+
                       <strong>
                         {formatPrice(
                           resaleResult.currentValue
                         )}
                       </strong>
+
                     </div>
 
                     <div>
-                      <span>Estimated Depreciation</span>
+
+                      <span>
+                        Estimated Depreciation
+                      </span>
+
                       <strong>
                         {resaleResult.depreciation}%
                       </strong>
+
                     </div>
 
                     <div>
-                      <span>Future Value</span>
+
+                      <span>
+                        Future Value
+                      </span>
+
                       <strong>
                         {formatPrice(
                           resaleResult.futureValue
                         )}
                       </strong>
+
                     </div>
 
                   </div>
 
                   <div className="estimate-disclaimer">
+
                     ⚠ This is an estimated projection,
                     not a guaranteed future market price.
                     Actual resale value may vary based on
                     condition, mileage, market demand,
                     location and other factors.
+
                   </div>
 
                 </>
@@ -2346,157 +2498,6 @@ function App() {
             </div>
 
           </section>
-
-        </main>
-
-      )}
-
-      {/* ======================================================
-          AI ASSISTANT
-          ====================================================== */}
-
-      {activePage === "assistant" && (
-
-        <main className="assistant-page">
-
-          <div className="assistant-shell">
-
-            <div className="assistant-intro">
-
-              <div className="hero-ai-badge">
-                ✦ CARVALUE AI
-              </div>
-
-              <h1>
-                Your personal
-                <br />
-                <span>car intelligence assistant.</span>
-              </h1>
-
-              <p>
-                Ask questions about prices,
-                recommendations, comparisons and
-                future resale.
-              </p>
-
-              <div className="assistant-capabilities">
-
-                <button
-                  onClick={() =>
-                    setChatInput(
-                      "I want to buy a used car under ₹8 lakh."
-                    )
-                  }
-                >
-                  🎯 Find a car
-                </button>
-
-                <button
-                  onClick={() =>
-                    setChatInput(
-                      "What is a fair price for my car?"
-                    )
-                  }
-                >
-                  ₹ Fair price
-                </button>
-
-                <button
-                  onClick={() =>
-                    setChatInput(
-                      "Compare my shortlisted cars."
-                    )
-                  }
-                >
-                  ⚖ Compare
-                </button>
-
-                <button
-                  onClick={() =>
-                    setChatInput(
-                      "What could my car be worth in 3 years?"
-                    )
-                  }
-                >
-                  🔮 Resale
-                </button>
-
-              </div>
-
-            </div>
-
-            <div className="chat-window">
-
-              <div className="chat-header">
-
-                <div className="chat-avatar">
-                  ✨
-                </div>
-
-                <div>
-                  <strong>
-                    CarValue AI
-                  </strong>
-
-                  <span>
-                    ● Assistant integration ready
-                  </span>
-                </div>
-
-              </div>
-
-              <div className="chat-messages">
-
-                {chatMessages.map(
-                  (message, index) => (
-
-                    <div
-                      className={
-                        message.role === "user"
-                          ? "chat-message user"
-                          : "chat-message bot"
-                      }
-                      key={index}
-                    >
-                      {message.text}
-                    </div>
-
-                  )
-                )}
-
-              </div>
-
-              <div className="chat-input-area">
-
-                <input
-                  value={chatInput}
-                  onChange={(e) =>
-                    setChatInput(e.target.value)
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      sendChatMessage();
-                    }
-                  }}
-                  placeholder="Ask about any car..."
-                />
-
-                <button
-                  onClick={sendChatMessage}
-                >
-                  →
-                </button>
-
-              </div>
-
-              <small className="chat-integration-note">
-                AI response engine can be connected
-                here by your AI backend/API.
-              </small>
-
-            </div>
-
-          </div>
 
         </main>
 
@@ -2555,81 +2556,113 @@ function App() {
             <div className="modal-grid">
 
               <div className="modal-detail">
+
                 <small>Model</small>
+
                 <strong>
                   {selectedCar.model}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Variant</small>
+
                 <strong>
                   {selectedCar.variant ||
                     "Standard"}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Year</small>
+
                 <strong>
                   {selectedCar.year}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Distance</small>
+
                 <strong>
                   {formatDistance(
                     selectedCar.distance
                   )}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Fuel</small>
+
                 <strong>
                   {selectedCar.fuel}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Transmission</small>
+
                 <strong>
                   {selectedCar.transmission}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Mileage</small>
+
                 <strong>
                   {selectedCar.mileage
                     ? `${selectedCar.mileage} km/l`
                     : "N/A"}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Owner</small>
+
                 <strong>
                   {selectedCar.owner}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Seats</small>
+
                 <strong>
                   {selectedCar.seats || "N/A"}
                 </strong>
+
               </div>
 
               <div className="modal-detail">
+
                 <small>Match Score</small>
+
                 <strong>
+
                   {Math.round(
                     selectedCar.match_score
                   )}
                   %
+
                 </strong>
+
               </div>
 
             </div>
@@ -2657,9 +2690,11 @@ function App() {
             </div>
 
             <div className="modal-note">
+
               This recommendation is generated
               using your requirements and the
               available vehicle dataset.
+
             </div>
 
           </div>
