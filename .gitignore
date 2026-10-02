@@ -1,0 +1,11 @@
+﻿.ipynb_checkpoints/
+.vscode/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.env
+.env.*
