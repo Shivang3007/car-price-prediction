@@ -4,10 +4,10 @@ import "./App.css";
 const API_URL = "http://127.0.0.1:5000";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("recommend");
+  const [activePage, setActivePage] = useState("home");
 
   // ============================================================
-  // OPTIONS
+  // DATASET OPTIONS
   // ============================================================
 
   const [options, setOptions] = useState({
@@ -21,6 +21,14 @@ function App() {
   });
 
   // ============================================================
+  // COMMON STATE
+  // ============================================================
+
+  const [selectedCar, setSelectedCar] = useState(null);
+  const [compareCars, setCompareCars] = useState([]);
+  const [analysisHistory, setAnalysisHistory] = useState([]);
+
+  // ============================================================
   // RECOMMENDATION FORM
   // ============================================================
 
@@ -32,6 +40,8 @@ function App() {
     seats: "",
     max_distance: "",
     max_age: "",
+    performance: "Balanced",
+    condition: "Used",
   });
 
   const [recommendations, setRecommendations] = useState([]);
@@ -61,13 +71,31 @@ function App() {
   const [predictionError, setPredictionError] = useState("");
 
   // ============================================================
-  // SELECTED CAR MODAL
+  // RESALE FORM
   // ============================================================
 
-  const [selectedCar, setSelectedCar] = useState(null);
+  const [resaleForm, setResaleForm] = useState({
+    currentValue: 800000,
+    ownershipYears: 3,
+  });
+
+  const [resaleResult, setResaleResult] = useState(null);
 
   // ============================================================
-  // LOAD DATASET OPTIONS
+  // CHATBOT UI
+  // ============================================================
+
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: "bot",
+      text: "Hi! I'm CarValue AI Assistant. Ask me about car prices, recommendations, comparison or resale value.",
+    },
+  ]);
+
+  const [chatInput, setChatInput] = useState("");
+
+  // ============================================================
+  // LOAD OPTIONS
   // ============================================================
 
   useEffect(() => {
@@ -85,7 +113,6 @@ function App() {
         setOptions(data);
 
         const firstBrand = data.brands?.[0] || "";
-
         const firstModel =
           data.brand_models?.[firstBrand]?.[0] || "";
 
@@ -96,23 +123,13 @@ function App() {
 
         setPredictionForm((prev) => ({
           ...prev,
-
           brand: firstBrand,
-
           model: firstModel,
-
           variant: firstVariant,
-
           fuel: data.fuels?.[0] || "",
-
-          transmission:
-            data.transmissions?.[0] || "",
-
-          owner:
-            data.owners?.[0] || "",
-
-          seats:
-            data.seats?.[0] || 5,
+          transmission: data.transmissions?.[0] || "",
+          owner: data.owners?.[0] || "",
+          seats: data.seats?.[0] || 5,
         }));
       } catch (error) {
         console.error("Options loading error:", error);
@@ -127,23 +144,14 @@ function App() {
   }, []);
 
   // ============================================================
-  // DEPENDENT DROPDOWN DATA
+  // DEPENDENT DROPDOWNS
   // ============================================================
 
   const availableModels = useMemo(() => {
-    if (!predictionForm.brand) {
-      return [];
-    }
+    if (!predictionForm.brand) return [];
 
-    return (
-      options.brand_models?.[
-        predictionForm.brand
-      ] || []
-    );
-  }, [
-    options.brand_models,
-    predictionForm.brand,
-  ]);
+    return options.brand_models?.[predictionForm.brand] || [];
+  }, [options.brand_models, predictionForm.brand]);
 
   const variantKey =
     predictionForm.brand && predictionForm.model
@@ -151,22 +159,54 @@ function App() {
       : "";
 
   const availableVariants = useMemo(() => {
-    if (!variantKey) {
-      return [];
-    }
+    if (!variantKey) return [];
 
-    return (
-      options.model_variants?.[
-        variantKey
-      ] || []
-    );
-  }, [
-    options.model_variants,
-    variantKey,
-  ]);
+    return options.model_variants?.[variantKey] || [];
+  }, [options.model_variants, variantKey]);
 
   // ============================================================
-  // RECOMMENDATION INPUT CHANGE
+  // HELPERS
+  // ============================================================
+
+  const formatPrice = (price) => {
+    if (
+      price === null ||
+      price === undefined ||
+      Number.isNaN(Number(price))
+    ) {
+      return "₹0";
+    }
+
+    return `₹${Number(price).toLocaleString("en-IN")}`;
+  };
+
+  const formatDistance = (distance) => {
+    if (distance === null || distance === undefined) {
+      return "-";
+    }
+
+    return `${Number(distance).toLocaleString("en-IN")} km`;
+  };
+
+  const getResaleEstimate = (value, years) => {
+    const current = Number(value) || 0;
+    const period = Number(years) || 0;
+
+    /*
+      Simple estimated depreciation projection.
+      This is intentionally presented as an estimate,
+      not a guaranteed future market price.
+    */
+
+    const annualRate = 0.105;
+    const futureValue =
+      current * Math.pow(1 - annualRate, period);
+
+    return Math.max(Math.round(futureValue), 0);
+  };
+
+  // ============================================================
+  // RECOMMENDATION INPUT
   // ============================================================
 
   const handleRecommendChange = (field, value) => {
@@ -177,7 +217,7 @@ function App() {
   };
 
   // ============================================================
-  // PREDICTION INPUT CHANGE
+  // PREDICTION INPUT
   // ============================================================
 
   const handlePredictionChange = (field, value) => {
@@ -192,11 +232,8 @@ function App() {
   // ============================================================
 
   const handleBrandChange = (brand) => {
-    const models =
-      options.brand_models?.[brand] || [];
-
-    const firstModel =
-      models[0] || "";
+    const models = options.brand_models?.[brand] || [];
+    const firstModel = models[0] || "";
 
     const variants =
       options.model_variants?.[
@@ -205,11 +242,8 @@ function App() {
 
     setPredictionForm((prev) => ({
       ...prev,
-
       brand,
-
       model: firstModel,
-
       variant: variants[0] || "",
     }));
 
@@ -229,9 +263,7 @@ function App() {
 
     setPredictionForm((prev) => ({
       ...prev,
-
       model,
-
       variant: variants[0] || "",
     }));
 
@@ -240,7 +272,7 @@ function App() {
   };
 
   // ============================================================
-  // RECOMMEND CARS
+  // FIND CARS
   // ============================================================
 
   const getRecommendations = async () => {
@@ -249,79 +281,57 @@ function App() {
       setRecommendError("");
       setRecommendations([]);
 
-      const response = await fetch(
-        `${API_URL}/recommend`,
-        {
-          method: "POST",
+      const response = await fetch(`${API_URL}/recommend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          budget:
+            recommendForm.budget === ""
+              ? 0
+              : Number(recommendForm.budget),
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          fuel: recommendForm.fuel || null,
 
-          body: JSON.stringify({
-            budget:
-              recommendForm.budget === ""
-                ? 0
-                : Number(
-                    recommendForm.budget
-                  ),
+          transmission:
+            recommendForm.transmission || null,
 
-            fuel:
-              recommendForm.fuel || null,
+          mileage:
+            recommendForm.mileage === ""
+              ? null
+              : Number(recommendForm.mileage),
 
-            transmission:
-              recommendForm.transmission ||
-              null,
+          seats:
+            recommendForm.seats === ""
+              ? null
+              : Number(recommendForm.seats),
 
-            mileage:
-              recommendForm.mileage === ""
-                ? null
-                : Number(
-                    recommendForm.mileage
-                  ),
+          max_distance:
+            recommendForm.max_distance === ""
+              ? null
+              : Number(recommendForm.max_distance),
 
-            seats:
-              recommendForm.seats === ""
-                ? null
-                : Number(
-                    recommendForm.seats
-                  ),
-
-            max_distance:
-              recommendForm.max_distance === ""
-                ? null
-                : Number(
-                    recommendForm.max_distance
-                  ),
-
-            max_age:
-              recommendForm.max_age === ""
-                ? null
-                : Number(
-                    recommendForm.max_age
-                  ),
-          }),
-        }
-      );
+          max_age:
+            recommendForm.max_age === ""
+              ? null
+              : Number(recommendForm.max_age),
+        }),
+      });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error ||
-            "Unable to get recommendations."
+          data.error || "Unable to get recommendations."
         );
       }
 
-      setRecommendations(
-        data.results || []
-      );
+      setRecommendations(data.results || []);
+      setActivePage("find");
+
     } catch (error) {
-      console.error(
-        "Recommendation error:",
-        error
-      );
+      console.error("Recommendation error:", error);
 
       setRecommendError(
         error.message ||
@@ -333,7 +343,7 @@ function App() {
   };
 
   // ============================================================
-  // PREDICT PRICE
+  // PRICE PREDICTION
   // ============================================================
 
   const predictPrice = async () => {
@@ -343,101 +353,70 @@ function App() {
       setPredictionResult(null);
 
       if (!predictionForm.brand) {
-        throw new Error(
-          "Please select a brand."
-        );
+        throw new Error("Please select a brand.");
       }
 
       if (!predictionForm.model) {
-        throw new Error(
-          "Please select a model."
-        );
+        throw new Error("Please select a model.");
       }
 
       if (!predictionForm.variant) {
-        throw new Error(
-          "Please select a variant."
-        );
+        throw new Error("Please select a variant.");
       }
 
-      const response = await fetch(
-        `${API_URL}/predict`,
-        {
-          method: "POST",
+      const response = await fetch(`${API_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          brand: predictionForm.brand,
+          model: predictionForm.model,
+          variant: predictionForm.variant,
+          year: Number(predictionForm.year),
+          distance: Number(predictionForm.distance),
+          engine_cc: Number(predictionForm.engine_cc),
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+          mileage:
+            predictionForm.mileage === ""
+              ? null
+              : Number(predictionForm.mileage),
 
-          body: JSON.stringify({
-            brand:
-              predictionForm.brand,
-
-            model:
-              predictionForm.model,
-
-            variant:
-              predictionForm.variant,
-
-            year:
-              Number(
-                predictionForm.year
-              ),
-
-            distance:
-              Number(
-                predictionForm.distance
-              ),
-
-            engine_cc:
-              Number(
-                predictionForm.engine_cc
-              ),
-
-            mileage:
-              predictionForm.mileage === ""
-                ? null
-                : Number(
-                    predictionForm.mileage
-                  ),
-
-            seats:
-              Number(
-                predictionForm.seats
-              ),
-
-            fuel:
-              predictionForm.fuel,
-
-            transmission:
-              predictionForm.transmission,
-
-            owner:
-              predictionForm.owner,
-          }),
-        }
-      );
+          seats: Number(predictionForm.seats),
+          fuel: predictionForm.fuel,
+          transmission: predictionForm.transmission,
+          owner: predictionForm.owner,
+        }),
+      });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.error ||
-            "Price prediction failed."
+          data.error || "Price prediction failed."
         );
       }
 
       setPredictionResult(data);
+
+      setAnalysisHistory((prev) => [
+        {
+          id: Date.now(),
+          title: `${predictionForm.brand} ${predictionForm.model}`,
+          variant: predictionForm.variant,
+          predictedPrice: data.predicted_price,
+          date: new Date().toLocaleDateString("en-IN"),
+        },
+        ...prev,
+      ].slice(0, 8));
+
+      setActivePage("dashboard");
+
     } catch (error) {
-      console.error(
-        "Prediction error:",
-        error
-      );
+      console.error("Prediction error:", error);
 
       setPredictionError(
-        error.message ||
-          "Unable to predict price."
+        error.message || "Unable to predict price."
       );
     } finally {
       setPredictionLoading(false);
@@ -445,579 +424,1078 @@ function App() {
   };
 
   // ============================================================
-  // FORMAT PRICE
+  // RESALE
   // ============================================================
 
-  const formatPrice = (price) => {
-    if (
-      price === null ||
-      price === undefined ||
-      Number.isNaN(Number(price))
-    ) {
-      return "₹0";
+  const calculateResale = () => {
+    const current = Number(resaleForm.currentValue);
+
+    if (!current || current <= 0) {
+      return;
     }
 
-    return `₹${Number(price).toLocaleString(
-      "en-IN"
-    )}`;
+    const future = getResaleEstimate(
+      resaleForm.currentValue,
+      resaleForm.ownershipYears
+    );
+
+    setResaleResult({
+      currentValue: current,
+      futureValue: future,
+      years: Number(resaleForm.ownershipYears),
+      depreciation: Math.round(
+        ((current - future) / current) * 100
+      ),
+    });
   };
 
   // ============================================================
-  // FORMAT DISTANCE
+  // COMPARE
   // ============================================================
 
-  const formatDistance = (distance) => {
-    if (
-      distance === null ||
-      distance === undefined
-    ) {
-      return "-";
+  const toggleCompare = (car) => {
+    const exists = compareCars.some(
+      (item) =>
+        item.title === car.title &&
+        item.year === car.year &&
+        item.actual_price === car.actual_price
+    );
+
+    if (exists) {
+      setCompareCars((prev) =>
+        prev.filter(
+          (item) =>
+            !(
+              item.title === car.title &&
+              item.year === car.year &&
+              item.actual_price === car.actual_price
+            )
+        )
+      );
+
+      return;
     }
 
-    return `${Number(distance).toLocaleString(
-      "en-IN"
-    )} km`;
+    if (compareCars.length >= 3) {
+      alert("You can compare maximum 3 cars at a time.");
+      return;
+    }
+
+    setCompareCars((prev) => [...prev, car]);
   };
 
   // ============================================================
-  // APP UI
+  // CHATBOT PLACEHOLDER
+  // ============================================================
+
+  const sendChatMessage = () => {
+    const message = chatInput.trim();
+
+    if (!message) return;
+
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text: message,
+      },
+      {
+        role: "bot",
+        text:
+          "AI Assistant is ready for integration. Your AI backend can be connected here to handle this conversation.",
+      },
+    ]);
+
+    setChatInput("");
+  };
+
+  // ============================================================
+  // QUICK NAVIGATION
+  // ============================================================
+
+  const openPrediction = () => {
+    setActivePage("predict");
+  };
+
+  const openFindCar = () => {
+    setActivePage("find");
+  };
+
+  // ============================================================
+  // FAIR PRICE
+  // ============================================================
+
+  const fairPrice = predictionResult
+    ? Number(predictionResult.predicted_price)
+    : null;
+
+  const selectedListingPrice =
+    selectedCar?.actual_price || null;
+
+  const fairPriceDifference =
+    fairPrice && selectedListingPrice
+      ? selectedListingPrice - fairPrice
+      : null;
+
+  const fairPriceStatus =
+    fairPriceDifference === null
+      ? "Waiting for vehicle data"
+      : fairPriceDifference <= 0
+      ? "Potentially below estimated value"
+      : fairPriceDifference <= fairPrice * 0.08
+      ? "Close to estimated market value"
+      : "Potentially above estimated value";
+
+  // ============================================================
+  // PAGE CONTENT
   // ============================================================
 
   return (
     <div className="app">
 
       {/* ======================================================
-          HERO
+          NAVBAR
           ====================================================== */}
 
-      <header className="hero">
+      <nav className="top-nav">
 
-        <div className="hero-content">
+        <button
+          className="brand-logo"
+          type="button"
+          onClick={() => setActivePage("home")}
+        >
+          <span className="brand-mark">C</span>
 
-          <div className="hero-badge">
-            AI POWERED AUTOMOTIVE INTELLIGENCE
-          </div>
+          <span>
+            <strong>CarValue</strong>
+            <small>AI</small>
+          </span>
+        </button>
 
-          <h1>
-            Car Price Prediction
-            <br />
-            <span>
-              & Recommendation
-            </span>
-          </h1>
+        <div className="nav-links">
 
-          <p>
-            Predict used-car prices and discover
-            vehicles that match your requirements.
-          </p>
+          <button
+            className={activePage === "home" ? "active" : ""}
+            onClick={() => setActivePage("home")}
+          >
+            Home
+          </button>
+
+          <button
+            className={activePage === "dashboard" ? "active" : ""}
+            onClick={() => setActivePage("dashboard")}
+          >
+            Dashboard
+          </button>
+
+          <button
+            className={activePage === "find" ? "active" : ""}
+            onClick={() => setActivePage("find")}
+          >
+            Find My Car
+          </button>
+
+          <button
+            className={activePage === "compare" ? "active" : ""}
+            onClick={() => setActivePage("compare")}
+          >
+            Compare
+          </button>
+
+          <button
+            className={activePage === "resale" ? "active" : ""}
+            onClick={() => setActivePage("resale")}
+          >
+            Resale
+          </button>
 
         </div>
 
-      </header>
+        <button
+          className="nav-ai-btn"
+          onClick={() => setActivePage("assistant")}
+        >
+          ✨ Ask AI
+        </button>
 
+      </nav>
 
       {/* ======================================================
-          TABS
+          HOME
           ====================================================== */}
 
-      <div className="main-tabs">
+      {activePage === "home" && (
 
-        <button
-          type="button"
-          className={
-            activeTab === "recommend"
-              ? "main-tab active"
-              : "main-tab"
-          }
-          onClick={() =>
-            setActiveTab("recommend")
-          }
-        >
-          <span>🚗</span>
-          Car Recommendation
-        </button>
+        <main>
 
-        <button
-          type="button"
-          className={
-            activeTab === "predict"
-              ? "main-tab active"
-              : "main-tab"
-          }
-          onClick={() =>
-            setActiveTab("predict")
-          }
-        >
-          <span>₹</span>
-          Price Prediction
-        </button>
+          <section className="home-hero">
 
-      </div>
+            <div className="hero-glow hero-glow-one" />
+            <div className="hero-glow hero-glow-two" />
 
+            <div className="home-hero-content">
 
-      <main className="main-content">
+              <div className="hero-ai-badge">
+                ✦ AI-POWERED CAR INTELLIGENCE
+              </div>
 
-        {/* ====================================================
-            RECOMMENDATION TAB
-            ==================================================== */}
+              <h1>
+                Know Your Car.
+                <br />
+                <span>Know Its Value.</span>
+              </h1>
 
-        {activeTab === "recommend" && (
+              <p>
+                CarValue AI combines machine learning,
+                smart recommendations and automotive
+                intelligence to help you make better
+                car decisions.
+              </p>
 
-          <>
+              <div className="hero-actions">
 
-            <section className="search-card">
+                <button
+                  className="hero-primary"
+                  onClick={() =>
+                    setActivePage("assistant")
+                  }
+                >
+                  ✨ Start with AI
+                </button>
 
-              <div className="section-title">
+                <button
+                  className="hero-secondary"
+                  onClick={openPrediction}
+                >
+                  ₹ Predict Car Price
+                </button>
+
+              </div>
+
+              <div className="hero-stats">
 
                 <div>
+                  <strong>87%</strong>
+                  <span>Model R²</span>
+                </div>
 
-                  <span className="section-kicker">
-                    FIND YOUR CAR
-                  </span>
+                <div>
+                  <strong>1,868+</strong>
+                  <span>Cars Dataset</span>
+                </div>
 
-                  <h2>
-                    Tell us what you need
-                  </h2>
-
-                  <p>
-                    Set your requirements and
-                    our recommendation engine
-                    will find suitable cars.
-                  </p>
-
+                <div>
+                  <strong>AI</strong>
+                  <span>Smart Insights</span>
                 </div>
 
               </div>
 
+            </div>
 
-              <div className="form-grid">
+            <div className="hero-car-visual">
 
-                {/* Budget */}
+              <div className="visual-ring ring-one" />
+              <div className="visual-ring ring-two" />
 
-                <div className="field">
+              <div className="car-visual-card">
 
-                  <label>
-                    Maximum Budget
-                  </label>
-
-                  <div className="input-with-prefix">
-
-                    <span>₹</span>
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        recommendForm.budget
-                      }
-                      onChange={(e) =>
-                        handleRecommendChange(
-                          "budget",
-                          e.target.value
-                        )
-                      }
-                      placeholder="e.g. 1000000"
-                    />
-
-                  </div>
-
+                <div className="car-visual-top">
+                  <span>AI VALUATION</span>
+                  <span>● LIVE</span>
                 </div>
 
-
-                {/* Fuel */}
-
-                <div className="field">
-
-                  <label>
-                    Fuel Type
-                  </label>
-
-                  <select
-                    value={
-                      recommendForm.fuel
-                    }
-                    onChange={(e) =>
-                      handleRecommendChange(
-                        "fuel",
-                        e.target.value
-                      )
-                    }
-                  >
-
-                    <option value="">
-                      Any Fuel
-                    </option>
-
-                    {options.fuels.map(
-                      (fuel) => (
-
-                        <option
-                          key={fuel}
-                          value={fuel}
-                        >
-                          {fuel}
-                        </option>
-
-                      )
-                    )}
-
-                  </select>
-
+                <div className="car-visual-car">
+                  🚘
                 </div>
 
-
-                {/* Transmission */}
-
-                <div className="field">
-
-                  <label>
-                    Transmission
-                  </label>
-
-                  <select
-                    value={
-                      recommendForm.transmission
-                    }
-                    onChange={(e) =>
-                      handleRecommendChange(
-                        "transmission",
-                        e.target.value
-                      )
-                    }
-                  >
-
-                    <option value="">
-                      Any Transmission
-                    </option>
-
-                    {options.transmissions.map(
-                      (transmission) => (
-
-                        <option
-                          key={transmission}
-                          value={transmission}
-                        >
-                          {transmission}
-                        </option>
-
-                      )
-                    )}
-
-                  </select>
-
+                <div className="visual-price">
+                  ₹8.45 L
                 </div>
 
-
-                {/* Mileage */}
-
-                <div className="field">
-
-                  <label>
-                    Minimum Mileage
-                  </label>
-
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={
-                      recommendForm.mileage
-                    }
-                    onChange={(e) =>
-                      handleRecommendChange(
-                        "mileage",
-                        e.target.value
-                      )
-                    }
-                    placeholder="e.g. 15"
-                  />
-
+                <div className="visual-caption">
+                  Estimated Market Value
                 </div>
 
-
-                {/* Seats */}
-
-                <div className="field">
-
-                  <label>
-                    Minimum Seats
-                  </label>
-
-                  <select
-                    value={
-                      recommendForm.seats
-                    }
-                    onChange={(e) =>
-                      handleRecommendChange(
-                        "seats",
-                        e.target.value
-                      )
-                    }
-                  >
-
-                    <option value="">
-                      Any Seats
-                    </option>
-
-                    {options.seats.map(
-                      (seat) => (
-
-                        <option
-                          key={seat}
-                          value={seat}
-                        >
-                          {seat} Seats
-                        </option>
-
-                      )
-                    )}
-
-                  </select>
-
-                </div>
-
-
-                {/* Distance */}
-
-                <div className="field">
-
-                  <label>
-                    Maximum Distance
-                  </label>
-
-                  <div className="input-with-suffix">
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        recommendForm.max_distance
-                      }
-                      onChange={(e) =>
-                        handleRecommendChange(
-                          "max_distance",
-                          e.target.value
-                        )
-                      }
-                      placeholder="e.g. 50000"
-                    />
-
-                    <span>km</span>
-
-                  </div>
-
-                </div>
-
-
-                {/* Age */}
-
-                <div className="field">
-
-                  <label>
-                    Maximum Car Age
-                  </label>
-
-                  <div className="input-with-suffix">
-
-                    <input
-                      type="number"
-                      min="0"
-                      value={
-                        recommendForm.max_age
-                      }
-                      onChange={(e) =>
-                        handleRecommendChange(
-                          "max_age",
-                          e.target.value
-                        )
-                      }
-                      placeholder="e.g. 5"
-                    />
-
-                    <span>years</span>
-
-                  </div>
-
+                <div className="visual-tags">
+                  <span>AI Model</span>
+                  <span>Used Car</span>
+                  <span>Smart Valuation</span>
                 </div>
 
               </div>
 
+            </div>
+
+          </section>
+
+          {/* FEATURE SECTION */}
+
+          <section className="feature-section">
+
+            <div className="section-heading-center">
+
+              <span>CAR INTELLIGENCE</span>
+
+              <h2>
+                Everything you need to understand
+                a car
+              </h2>
+
+              <p>
+                One platform for valuation,
+                discovery, comparison and resale.
+              </p>
+
+            </div>
+
+            <div className="feature-grid">
 
               <button
-                className="primary-btn"
-                type="button"
-                onClick={
-                  getRecommendations
-                }
-                disabled={
-                  recommendLoading
-                }
+                className="feature-card feature-main"
+                onClick={openPrediction}
               >
-
-                {recommendLoading
-                  ? "Finding Cars..."
-                  : "Find Recommended Cars →"}
-
+                <span className="feature-icon">₹</span>
+                <span className="feature-label">
+                  PRICE ENGINE
+                </span>
+                <h3>Predict Car Price</h3>
+                <p>
+                  Get an ML-powered estimated
+                  market price from vehicle details.
+                </p>
+                <strong>Start valuation →</strong>
               </button>
 
+              <button
+                className="feature-card"
+                onClick={openFindCar}
+              >
+                <span className="feature-icon">🎯</span>
+                <span className="feature-label">
+                  SMART SEARCH
+                </span>
+                <h3>Find My Best Car</h3>
+                <p>
+                  Discover cars based on your
+                  budget and lifestyle.
+                </p>
+                <strong>Find cars →</strong>
+              </button>
 
-              {recommendError && (
+              <button
+                className="feature-card"
+                onClick={() => setActivePage("compare")}
+              >
+                <span className="feature-icon">⚖️</span>
+                <span className="feature-label">
+                  DECISION ENGINE
+                </span>
+                <h3>Compare Cars</h3>
+                <p>
+                  Compare prices, specifications,
+                  mileage and more.
+                </p>
+                <strong>Compare →</strong>
+              </button>
 
-                <div className="error-message">
-                  {recommendError}
+              <button
+                className="feature-card"
+                onClick={() => setActivePage("resale")}
+              >
+                <span className="feature-icon">🔮</span>
+                <span className="feature-label">
+                  FUTURE VALUE
+                </span>
+                <h3>Future Resale</h3>
+                <p>
+                  Estimate how your car value may
+                  change over time.
+                </p>
+                <strong>Explore resale →</strong>
+              </button>
+
+              <button
+                className="feature-card"
+                onClick={() => setActivePage("dashboard")}
+              >
+                <span className="feature-icon">📊</span>
+                <span className="feature-label">
+                  MY GARAGE
+                </span>
+                <h3>My Dashboard</h3>
+                <p>
+                  View your analyses, predictions
+                  and comparison activity.
+                </p>
+                <strong>Open dashboard →</strong>
+              </button>
+
+              <button
+                className="feature-card ai-feature"
+                onClick={() => setActivePage("assistant")}
+              >
+                <span className="feature-icon">✨</span>
+                <span className="feature-label">
+                  AI ASSISTANT
+                </span>
+                <h3>Talk to CarValue AI</h3>
+                <p>
+                  Your conversational car-buying
+                  assistant.
+                </p>
+                <strong>Ask AI →</strong>
+              </button>
+
+            </div>
+
+          </section>
+
+        </main>
+
+      )}
+
+      {/* ======================================================
+          DASHBOARD
+          ====================================================== */}
+
+      {activePage === "dashboard" && (
+
+        <main className="page-container">
+
+          <div className="page-heading">
+
+            <div>
+              <span>MY GARAGE</span>
+              <h1>CarValue Dashboard</h1>
+              <p>
+                Your car analysis and valuation
+                workspace.
+              </p>
+            </div>
+
+            <button
+              className="dark-action"
+              onClick={openPrediction}
+            >
+              + New Analysis
+            </button>
+
+          </div>
+
+          <div className="dashboard-stats">
+
+            <div className="dashboard-stat">
+              <span>SELECTED CAR</span>
+              <strong>
+                {predictionForm.brand
+                  ? `${predictionForm.brand} ${predictionForm.model}`
+                  : "No car yet"}
+              </strong>
+              <small>
+                {predictionForm.variant || "Start an analysis"}
+              </small>
+            </div>
+
+            <div className="dashboard-stat">
+              <span>PREDICTED PRICE</span>
+              <strong>
+                {predictionResult
+                  ? formatPrice(
+                      predictionResult.predicted_price
+                    )
+                  : "—"}
+              </strong>
+              <small>ML estimated value</small>
+            </div>
+
+            <div className="dashboard-stat">
+              <span>FUTURE RESALE</span>
+              <strong>
+                {resaleResult
+                  ? formatPrice(
+                      resaleResult.futureValue
+                    )
+                  : "—"}
+              </strong>
+              <small>Estimated future value</small>
+            </div>
+
+            <div className="dashboard-stat">
+              <span>COMPARE LIST</span>
+              <strong>{compareCars.length}</strong>
+              <small>Cars selected</small>
+            </div>
+
+          </div>
+
+          <div className="dashboard-layout">
+
+            <section className="dashboard-main-card">
+
+              <div className="card-heading">
+
+                <div>
+                  <span>MY CAR ANALYSIS</span>
+                  <h2>
+                    {predictionForm.brand
+                      ? `${predictionForm.brand} ${predictionForm.model}`
+                      : "No analysis yet"}
+                  </h2>
+                </div>
+
+                <div className="status-pill">
+                  ● AI READY
+                </div>
+
+              </div>
+
+              {predictionResult ? (
+
+                <div className="analysis-result">
+
+                  <div className="big-price">
+                    {formatPrice(
+                      predictionResult.predicted_price
+                    )}
+                    <small>
+                      Estimated Market Price
+                    </small>
+                  </div>
+
+                  <div className="analysis-grid">
+
+                    <div>
+                      <span>Model Accuracy</span>
+                      <strong>
+                        {(
+                          predictionResult.r2_score * 100
+                        ).toFixed(1)}
+                        %
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Year</span>
+                      <strong>
+                        {predictionForm.year}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Distance</span>
+                      <strong>
+                        {formatDistance(
+                          predictionForm.distance
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Fuel</span>
+                      <strong>
+                        {predictionForm.fuel}
+                      </strong>
+                    </div>
+
+                  </div>
+
+                </div>
+
+              ) : (
+
+                <div className="empty-analysis">
+
+                  <div>🚘</div>
+
+                  <h3>
+                    Your car analysis will appear here
+                  </h3>
+
+                  <p>
+                    Predict a car price to create
+                    your first analysis.
+                  </p>
+
+                  <button
+                    className="dark-action"
+                    onClick={openPrediction}
+                  >
+                    Predict My Car
+                  </button>
+
                 </div>
 
               )}
 
             </section>
 
+            <section className="dashboard-side-card">
 
-            {/* ==================================================
-                RESULTS
-                ================================================== */}
+              <div className="card-heading">
+                <div>
+                  <span>AI ASSISTANT</span>
+                  <h2>Need help?</h2>
+                </div>
+              </div>
 
-            {recommendations.length > 0 && (
+              <div className="mini-ai-box">
 
-              <section className="results-section">
-
-                <div className="results-header">
-
-                  <div>
-
-                    <span className="section-kicker">
-                      MATCHED VEHICLES
-                    </span>
-
-                    <h2>
-                      Recommended Cars
-                    </h2>
-
-                    <p>
-                      Ranked according to your
-                      requirements.
-                    </p>
-
-                  </div>
-
-                  <div className="result-count">
-
-                    {recommendations.length}
-
-                    <span>
-                      cars found
-                    </span>
-
-                  </div>
-
+                <div className="ai-avatar">
+                  ✨
                 </div>
 
+                <p>
+                  Ask me about prices, finding cars,
+                  comparisons or resale value.
+                </p>
 
-                <div className="results-grid">
+                <button
+                  onClick={() =>
+                    setActivePage("assistant")
+                  }
+                >
+                  Open AI Assistant →
+                </button>
 
-                  {recommendations.map(
-                    (car, index) => (
+              </div>
 
+            </section>
+
+          </div>
+
+          <section className="history-card">
+
+            <div className="card-heading">
+              <div>
+                <span>ACTIVITY</span>
+                <h2>Recent Analyses</h2>
+              </div>
+            </div>
+
+            {analysisHistory.length === 0 ? (
+
+              <div className="history-empty">
+                No analysis history yet.
+              </div>
+
+            ) : (
+
+              <div className="history-list">
+
+                {analysisHistory.map((item) => (
+
+                  <div
+                    className="history-item"
+                    key={item.id}
+                  >
+
+                    <div className="history-car-icon">
+                      🚘
+                    </div>
+
+                    <div>
+                      <strong>
+                        {item.title}
+                      </strong>
+
+                      <span>
+                        {item.variant} • {item.date}
+                      </span>
+                    </div>
+
+                    <strong className="history-price">
+                      {formatPrice(
+                        item.predictedPrice
+                      )}
+                    </strong>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            )}
+
+          </section>
+
+        </main>
+
+      )}
+
+      {/* ======================================================
+          FIND MY CAR
+          ====================================================== */}
+
+      {activePage === "find" && (
+
+        <main className="page-container">
+
+          <div className="page-heading">
+
+            <div>
+              <span>SMART CAR SELECTION</span>
+              <h1>Find My Best Car</h1>
+              <p>
+                Tell us what you need and discover
+                matching vehicles.
+              </p>
+            </div>
+
+          </div>
+
+          <section className="smart-search-card">
+
+            <div className="smart-search-header">
+
+              <div className="smart-search-icon">
+                🎯
+              </div>
+
+              <div>
+                <h2>
+                  Build your perfect car profile
+                </h2>
+
+                <p>
+                  The recommendation engine will
+                  rank cars based on your preferences.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="smart-form-grid">
+
+              <div className="field">
+                <label>Maximum Budget</label>
+
+                <div className="input-with-prefix">
+                  <span>₹</span>
+
+                  <input
+                    type="number"
+                    value={recommendForm.budget}
+                    onChange={(e) =>
+                      handleRecommendChange(
+                        "budget",
+                        e.target.value
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Fuel Preference</label>
+
+                <select
+                  value={recommendForm.fuel}
+                  onChange={(e) =>
+                    handleRecommendChange(
+                      "fuel",
+                      e.target.value
+                    )
+                  }
+                >
+                  <option value="">
+                    Any Fuel
+                  </option>
+
+                  {options.fuels.map((fuel) => (
+                    <option key={fuel} value={fuel}>
+                      {fuel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Transmission</label>
+
+                <select
+                  value={recommendForm.transmission}
+                  onChange={(e) =>
+                    handleRecommendChange(
+                      "transmission",
+                      e.target.value
+                    )
+                  }
+                >
+                  <option value="">
+                    Any Transmission
+                  </option>
+
+                  {options.transmissions.map(
+                    (transmission) => (
+                      <option
+                        key={transmission}
+                        value={transmission}
+                      >
+                        {transmission}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Maximum Kilometers</label>
+
+                <div className="input-with-suffix">
+                  <input
+                    type="number"
+                    value={recommendForm.max_distance}
+                    onChange={(e) =>
+                      handleRecommendChange(
+                        "max_distance",
+                        e.target.value
+                      )
+                    }
+                    placeholder="50000"
+                  />
+                  <span>km</span>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Minimum Mileage</label>
+
+                <div className="input-with-suffix">
+                  <input
+                    type="number"
+                    value={recommendForm.mileage}
+                    onChange={(e) =>
+                      handleRecommendChange(
+                        "mileage",
+                        e.target.value
+                      )
+                    }
+                    placeholder="15"
+                  />
+                  <span>km/l</span>
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Family Size</label>
+
+                <select
+                  value={recommendForm.seats}
+                  onChange={(e) =>
+                    handleRecommendChange(
+                      "seats",
+                      e.target.value
+                    )
+                  }
+                >
+                  <option value="">
+                    Any Family Size
+                  </option>
+
+                  {options.seats.map((seat) => (
+                    <option key={seat} value={seat}>
+                      {seat} seats
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Performance Preference</label>
+
+                <select
+                  value={recommendForm.performance}
+                  onChange={(e) =>
+                    handleRecommendChange(
+                      "performance",
+                      e.target.value
+                    )
+                  }
+                >
+                  <option>Balanced</option>
+                  <option>Economy</option>
+                  <option>Performance</option>
+                  <option>Premium</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Car Condition</label>
+
+                <select
+                  value={recommendForm.condition}
+                  onChange={(e) =>
+                    handleRecommendChange(
+                      "condition",
+                      e.target.value
+                    )
+                  }
+                >
+                  <option>Used</option>
+                  <option>New</option>
+                  <option>Either</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Maximum Car Age</label>
+
+                <div className="input-with-suffix">
+                  <input
+                    type="number"
+                    value={recommendForm.max_age}
+                    onChange={(e) =>
+                      handleRecommendChange(
+                        "max_age",
+                        e.target.value
+                      )
+                    }
+                    placeholder="5"
+                  />
+                  <span>years</span>
+                </div>
+              </div>
+
+            </div>
+
+            <button
+              className="large-gradient-btn"
+              onClick={getRecommendations}
+              disabled={recommendLoading}
+            >
+              {recommendLoading
+                ? "Finding Your Cars..."
+                : "🎯 Find My Best Cars"}
+            </button>
+
+            {recommendError && (
+              <div className="error-message">
+                {recommendError}
+              </div>
+            )}
+
+          </section>
+
+          {recommendations.length > 0 && (
+
+            <section className="recommend-results">
+
+              <div className="results-heading-new">
+
+                <div>
+                  <span>MATCHED VEHICLES</span>
+                  <h2>
+                    Cars selected for you
+                  </h2>
+                </div>
+
+                <div className="result-count-new">
+                  {recommendations.length} matches
+                </div>
+
+              </div>
+
+              <div className="new-car-grid">
+
+                {recommendations.map(
+                  (car, index) => {
+
+                    const isCompared =
+                      compareCars.some(
+                        (item) =>
+                          item.title === car.title &&
+                          item.year === car.year &&
+                          item.actual_price ===
+                            car.actual_price
+                      );
+
+                    return (
                       <article
-                        className="car-card"
+                        className="new-car-card"
                         key={`${car.title}-${index}`}
                       >
 
-                        <div className="car-card-top">
+                        <div className="car-image-area">
 
-                          <div className="car-rank">
-                            #{index + 1}
+                          <div className="car-image-placeholder">
+                            🚘
                           </div>
 
-                          <div className="match-score">
+                          <span className="car-number">
+                            #{index + 1}
+                          </span>
+
+                          <span className="car-match">
                             {Math.round(
                               car.match_score
                             )}
-                            % Match
-                          </div>
+                            % MATCH
+                          </span>
 
                         </div>
 
+                        <div className="new-car-body">
 
-                        <div className="car-card-body">
-
-                          <span className="car-brand">
+                          <span className="new-car-brand">
                             {car.brand}
                           </span>
 
-                          <h3>
-                            {car.title}
-                          </h3>
+                          <h3>{car.title}</h3>
 
-                          <div className="car-price">
+                          <div className="new-car-price">
                             {formatPrice(
                               car.actual_price
                             )}
                           </div>
 
+                          <div className="new-car-specs">
 
-                          <div className="car-details">
+                            <span>
+                              📅 {car.year}
+                            </span>
 
-                            <div>
-                              <span>
-                                Year
-                              </span>
+                            <span>
+                              🛣️{" "}
+                              {formatDistance(
+                                car.distance
+                              )}
+                            </span>
 
-                              <strong>
-                                {car.year}
-                              </strong>
-                            </div>
+                            <span>
+                              ⛽ {car.fuel}
+                            </span>
 
-                            <div>
-                              <span>
-                                Distance
-                              </span>
-
-                              <strong>
-                                {formatDistance(
-                                  car.distance
-                                )}
-                              </strong>
-                            </div>
-
-                            <div>
-                              <span>
-                                Fuel
-                              </span>
-
-                              <strong>
-                                {car.fuel}
-                              </strong>
-                            </div>
-
-                            <div>
-                              <span>
-                                Gearbox
-                              </span>
-
-                              <strong>
-                                {car.transmission}
-                              </strong>
-                            </div>
+                            <span>
+                              ⚙️ {car.transmission}
+                            </span>
 
                           </div>
 
-
-                          <div className="car-card-footer">
-
-                            <span>
-                              {car.owner}
-                            </span>
+                          <div className="new-car-actions">
 
                             <button
-                              type="button"
-                              className="view-link"
                               onClick={() =>
-                                setSelectedCar(
-                                  car
-                                )
+                                setSelectedCar(car)
                               }
                             >
-                              View Car Details →
+                              View Details
+                            </button>
+
+                            <button
+                              className={
+                                isCompared
+                                  ? "compare-active"
+                                  : ""
+                              }
+                              onClick={() =>
+                                toggleCompare(car)
+                              }
+                            >
+                              {isCompared
+                                ? "✓ Compared"
+                                : "⚖ Compare"}
                             </button>
 
                           </div>
@@ -1025,182 +1503,121 @@ function App() {
                         </div>
 
                       </article>
-
-                    )
-                  )}
-
-                </div>
-
-              </section>
-
-            )}
-
-          </>
-
-        )}
-
-
-        {/* ====================================================
-            PRICE PREDICTION TAB
-            ==================================================== */}
-
-        {activeTab === "predict" && (
-
-          <section className="prediction-page-card">
-
-            {/* HERO */}
-
-            <div className="prediction-hero">
-
-              <div>
-
-                <span className="prediction-badge">
-                  AI PRICE ENGINE
-                </span>
-
-                <h2>
-                  Car Price Prediction
-                </h2>
-
-                <p>
-                  Enter vehicle details and get
-                  an AI-powered estimated market
-                  price.
-                </p>
+                    );
+                  }
+                )}
 
               </div>
 
-              <div className="prediction-icon">
+            </section>
+
+          )}
+
+        </main>
+
+      )}
+
+      {/* ======================================================
+          PRICE PREDICTION
+          ====================================================== */}
+
+      {activePage === "predict" && (
+
+        <main className="page-container">
+
+          <div className="page-heading">
+
+            <div>
+              <span>AI PRICE ENGINE</span>
+              <h1>Predict Car Price</h1>
+              <p>
+                Estimate the market value of a used
+                car using the trained ML model.
+              </p>
+            </div>
+
+          </div>
+
+          <section className="prediction-modern-card">
+
+            <div className="prediction-modern-header">
+
+              <div>
+                <span>ML VALUATION ENGINE</span>
+
+                <h2>
+                  Tell us about your car
+                </h2>
+
+                <p>
+                  Select the vehicle and enter its
+                  current condition.
+                </p>
+              </div>
+
+              <div className="prediction-big-icon">
                 ₹
               </div>
 
             </div>
 
+            <div className="prediction-modern-body">
 
-            {/* VEHICLE INFORMATION */}
+              <div className="modern-form-grid">
 
-            <div className="prediction-section">
-
-              <div className="prediction-section-title">
-
-                <div>
-
-                  <h3>
-                    Vehicle Information
-                  </h3>
-
-                  <p>
-                    Select values directly from
-                    the available dataset.
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <div className="prediction-grid">
-
-                {/* BRAND */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Brand
-                  </label>
+                <div className="field">
+                  <label>Brand</label>
 
                   <select
-                    value={
-                      predictionForm.brand
-                    }
+                    value={predictionForm.brand}
                     onChange={(e) =>
                       handleBrandChange(
                         e.target.value
                       )
                     }
                   >
-
                     <option value="">
                       Select Brand
                     </option>
 
-                    {options.brands.map(
-                      (brand) => (
-
-                        <option
-                          key={brand}
-                          value={brand}
-                        >
-                          {brand}
-                        </option>
-
-                      )
-                    )}
-
+                    {options.brands.map((brand) => (
+                      <option key={brand} value={brand}>
+                        {brand}
+                      </option>
+                    ))}
                   </select>
-
                 </div>
 
-
-                {/* MODEL */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Model
-                  </label>
+                <div className="field">
+                  <label>Model</label>
 
                   <select
-                    value={
-                      predictionForm.model
-                    }
-                    disabled={
-                      !predictionForm.brand
-                    }
+                    value={predictionForm.model}
+                    disabled={!predictionForm.brand}
                     onChange={(e) =>
                       handleModelChange(
                         e.target.value
                       )
                     }
                   >
-
                     <option value="">
                       Select Model
                     </option>
 
-                    {availableModels.map(
-                      (model) => (
-
-                        <option
-                          key={model}
-                          value={model}
-                        >
-                          {model}
-                        </option>
-
-                      )
-                    )}
-
+                    {availableModels.map((model) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))}
                   </select>
-
                 </div>
 
-
-                {/* VARIANT */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Variant
-                  </label>
+                <div className="field">
+                  <label>Variant</label>
 
                   <select
-                    value={
-                      predictionForm.variant
-                    }
-                    disabled={
-                      !predictionForm.model
-                    }
+                    value={predictionForm.variant}
+                    disabled={!predictionForm.model}
                     onChange={(e) =>
                       handlePredictionChange(
                         "variant",
@@ -1208,44 +1625,31 @@ function App() {
                       )
                     }
                   >
-
                     <option value="">
                       Select Variant
                     </option>
 
                     {availableVariants.map(
                       (variant) => (
-
                         <option
                           key={variant}
                           value={variant}
                         >
                           {variant}
                         </option>
-
                       )
                     )}
-
                   </select>
-
                 </div>
 
-
-                {/* YEAR */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Manufacturing Year
-                  </label>
+                <div className="field">
+                  <label>Manufacturing Year</label>
 
                   <input
                     type="number"
                     min="1990"
                     max="2026"
-                    value={
-                      predictionForm.year
-                    }
+                    value={predictionForm.year}
                     onChange={(e) =>
                       handlePredictionChange(
                         "year",
@@ -1253,26 +1657,16 @@ function App() {
                       )
                     }
                   />
-
                 </div>
 
+                <div className="field">
+                  <label>Distance Driven</label>
 
-                {/* DISTANCE */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Distance Driven
-                  </label>
-
-                  <div className="prediction-input-unit">
-
+                  <div className="input-with-suffix">
                     <input
                       type="number"
                       min="0"
-                      value={
-                        predictionForm.distance
-                      }
+                      value={predictionForm.distance}
                       onChange={(e) =>
                         handlePredictionChange(
                           "distance",
@@ -1280,32 +1674,18 @@ function App() {
                         )
                       }
                     />
-
-                    <span>
-                      km
-                    </span>
-
+                    <span>km</span>
                   </div>
-
                 </div>
 
+                <div className="field">
+                  <label>Engine Capacity</label>
 
-                {/* ENGINE */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Engine Capacity
-                  </label>
-
-                  <div className="prediction-input-unit">
-
+                  <div className="input-with-suffix">
                     <input
                       type="number"
                       min="500"
-                      value={
-                        predictionForm.engine_cc
-                      }
+                      value={predictionForm.engine_cc}
                       onChange={(e) =>
                         handlePredictionChange(
                           "engine_cc",
@@ -1313,33 +1693,19 @@ function App() {
                         )
                       }
                     />
-
-                    <span>
-                      cc
-                    </span>
-
+                    <span>cc</span>
                   </div>
-
                 </div>
 
+                <div className="field">
+                  <label>Mileage</label>
 
-                {/* MILEAGE */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Mileage
-                  </label>
-
-                  <div className="prediction-input-unit">
-
+                  <div className="input-with-suffix">
                     <input
                       type="number"
                       min="0"
                       step="0.1"
-                      value={
-                        predictionForm.mileage
-                      }
+                      value={predictionForm.mileage}
                       onChange={(e) =>
                         handlePredictionChange(
                           "mileage",
@@ -1347,68 +1713,35 @@ function App() {
                         )
                       }
                     />
-
-                    <span>
-                      km/l
-                    </span>
-
+                    <span>km/l</span>
                   </div>
-
                 </div>
 
-
-                {/* SEATS */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Seats
-                  </label>
+                <div className="field">
+                  <label>Seats</label>
 
                   <select
-                    value={
-                      predictionForm.seats
-                    }
+                    value={predictionForm.seats}
                     onChange={(e) =>
                       handlePredictionChange(
                         "seats",
-                        Number(
-                          e.target.value
-                        )
+                        Number(e.target.value)
                       )
                     }
                   >
-
-                    {options.seats.map(
-                      (seat) => (
-
-                        <option
-                          key={seat}
-                          value={seat}
-                        >
-                          {seat} Seats
-                        </option>
-
-                      )
-                    )}
-
+                    {options.seats.map((seat) => (
+                      <option key={seat} value={seat}>
+                        {seat} Seats
+                      </option>
+                    ))}
                   </select>
-
                 </div>
 
-
-                {/* FUEL */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Fuel Type
-                  </label>
+                <div className="field">
+                  <label>Fuel Type</label>
 
                   <select
-                    value={
-                      predictionForm.fuel
-                    }
+                    value={predictionForm.fuel}
                     onChange={(e) =>
                       handlePredictionChange(
                         "fuel",
@@ -1416,41 +1749,23 @@ function App() {
                       )
                     }
                   >
-
                     <option value="">
                       Select Fuel
                     </option>
 
-                    {options.fuels.map(
-                      (fuel) => (
-
-                        <option
-                          key={fuel}
-                          value={fuel}
-                        >
-                          {fuel}
-                        </option>
-
-                      )
-                    )}
-
+                    {options.fuels.map((fuel) => (
+                      <option key={fuel} value={fuel}>
+                        {fuel}
+                      </option>
+                    ))}
                   </select>
-
                 </div>
 
-
-                {/* TRANSMISSION */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Transmission
-                  </label>
+                <div className="field">
+                  <label>Transmission</label>
 
                   <select
-                    value={
-                      predictionForm.transmission
-                    }
+                    value={predictionForm.transmission}
                     onChange={(e) =>
                       handlePredictionChange(
                         "transmission",
@@ -1458,41 +1773,28 @@ function App() {
                       )
                     }
                   >
-
                     <option value="">
                       Select Transmission
                     </option>
 
                     {options.transmissions.map(
                       (transmission) => (
-
                         <option
                           key={transmission}
                           value={transmission}
                         >
                           {transmission}
                         </option>
-
                       )
                     )}
-
                   </select>
-
                 </div>
 
-
-                {/* OWNER */}
-
-                <div className="prediction-field">
-
-                  <label>
-                    Ownership
-                  </label>
+                <div className="field">
+                  <label>Ownership</label>
 
                   <select
-                    value={
-                      predictionForm.owner
-                    }
+                    value={predictionForm.owner}
                     onChange={(e) =>
                       handlePredictionChange(
                         "owner",
@@ -1500,166 +1802,107 @@ function App() {
                       )
                     }
                   >
-
                     <option value="">
                       Select Owner
                     </option>
 
-                    {options.owners.map(
-                      (owner) => (
-
-                        <option
-                          key={owner}
-                          value={owner}
-                        >
-                          {owner}
-                        </option>
-
-                      )
-                    )}
-
+                    {options.owners.map((owner) => (
+                      <option key={owner} value={owner}>
+                        {owner}
+                      </option>
+                    ))}
                   </select>
-
                 </div>
 
               </div>
+
+              {predictionError && (
+                <div className="prediction-error">
+                  {predictionError}
+                </div>
+              )}
+
+              <button
+                className="large-gradient-btn"
+                onClick={predictPrice}
+                disabled={
+                  predictionLoading ||
+                  !predictionForm.brand ||
+                  !predictionForm.model ||
+                  !predictionForm.variant ||
+                  !predictionForm.fuel ||
+                  !predictionForm.transmission ||
+                  !predictionForm.owner
+                }
+              >
+                {predictionLoading
+                  ? "⏳ AI is calculating..."
+                  : "₹ Predict My Car Price"}
+              </button>
 
             </div>
 
-
-            {/* ERROR */}
-
-            {predictionError && (
-
-              <div className="prediction-error">
-                {predictionError}
-              </div>
-
-            )}
-
-
-            {/* PREDICT BUTTON */}
-
-            <button
-              className="prediction-submit"
-              type="button"
-              onClick={predictPrice}
-              disabled={
-                predictionLoading ||
-                !predictionForm.brand ||
-                !predictionForm.model ||
-                !predictionForm.variant ||
-                !predictionForm.fuel ||
-                !predictionForm.transmission ||
-                !predictionForm.owner
-              }
-            >
-
-              {predictionLoading
-                ? "Predicting Price..."
-                : "Predict Car Price →"}
-
-            </button>
-
-
-            {/* ==================================================
-                PREDICTION RESULT
-                ================================================== */}
-
             {predictionResult && (
 
-              <div className="prediction-result-card">
+              <div className="prediction-success">
 
-                <div className="prediction-result-label">
-                  ESTIMATED MARKET PRICE
+                <div>
+                  <span>ESTIMATED MARKET PRICE</span>
+
+                  <strong>
+                    {formatPrice(
+                      predictionResult.predicted_price
+                    )}
+                  </strong>
+
+                  <p>
+                    Estimated using the trained
+                    CarValue AI machine-learning model.
+                  </p>
                 </div>
 
-                <div className="prediction-price">
+                <div className="prediction-confidence">
 
-                  {formatPrice(
-                    predictionResult.predicted_price
-                  )}
+                  <span>MODEL R²</span>
 
-                </div>
+                  <strong>
+                    {(
+                      predictionResult.r2_score * 100
+                    ).toFixed(2)}
+                    %
+                  </strong>
 
-                <div className="prediction-meta">
-
-                  <span>
-                    AI Model:
-                    <strong>
-                      {" "}
-                      {predictionResult.model_name}
-                    </strong>
-                  </span>
-
-                  <span>
-                    Model R²:
-                    <strong>
-                      {" "}
-                      {(
-                        predictionResult.r2_score *
-                        100
-                      ).toFixed(2)}
-                      %
-                    </strong>
-                  </span>
+                  <small>
+                    Validation performance
+                  </small>
 
                 </div>
 
+                <div className="prediction-result-actions">
 
-                <div className="prediction-car-summary">
+                  <button
+                    onClick={() => {
+                      setResaleForm({
+                        currentValue:
+                          Math.round(
+                            predictionResult.predicted_price
+                          ),
+                        ownershipYears: 3,
+                      });
 
-                  <div>
+                      setActivePage("resale");
+                    }}
+                  >
+                    🔮 Estimate Resale
+                  </button>
 
-                    <small>
-                      Vehicle
-                    </small>
-
-                    <strong>
-                      {predictionForm.brand}{" "}
-                      {predictionForm.model}
-                    </strong>
-
-                  </div>
-
-
-                  <div>
-
-                    <small>
-                      Variant
-                    </small>
-
-                    <strong>
-                      {predictionForm.variant}
-                    </strong>
-
-                  </div>
-
-
-                  <div>
-
-                    <small>
-                      Year
-                    </small>
-
-                    <strong>
-                      {predictionForm.year}
-                    </strong>
-
-                  </div>
-
-
-                  <div>
-
-                    <small>
-                      Fuel
-                    </small>
-
-                    <strong>
-                      {predictionForm.fuel}
-                    </strong>
-
-                  </div>
+                  <button
+                    onClick={() =>
+                      setActivePage("dashboard")
+                    }
+                  >
+                    📊 View Dashboard
+                  </button>
 
                 </div>
 
@@ -1669,22 +1912,605 @@ function App() {
 
           </section>
 
-        )}
+        </main>
 
-      </main>
+      )}
 
+      {/* ======================================================
+          COMPARE
+          ====================================================== */}
 
-      {/* ========================================================
+      {activePage === "compare" && (
+
+        <main className="page-container">
+
+          <div className="page-heading">
+
+            <div>
+              <span>DECISION ENGINE</span>
+              <h1>Compare Cars</h1>
+              <p>
+                Compare up to three shortlisted
+                vehicles side by side.
+              </p>
+            </div>
+
+            <button
+              className="dark-action"
+              onClick={openFindCar}
+            >
+              + Find Cars
+            </button>
+
+          </div>
+
+          {compareCars.length === 0 ? (
+
+            <section className="empty-feature-card">
+
+              <div>⚖️</div>
+
+              <h2>
+                Your comparison is empty
+              </h2>
+
+              <p>
+                Go to Find My Car and select
+                vehicles using the Compare button.
+              </p>
+
+              <button
+                className="large-gradient-btn small-btn"
+                onClick={openFindCar}
+              >
+                Find Cars to Compare
+              </button>
+
+            </section>
+
+          ) : (
+
+            <section className="compare-card">
+
+              <div className="compare-header">
+                <span>
+                  {compareCars.length}/3 SELECTED
+                </span>
+
+                <button
+                  onClick={() => setCompareCars([])}
+                >
+                  Clear All
+                </button>
+              </div>
+
+              <div className="compare-grid">
+
+                {compareCars.map((car, index) => (
+
+                  <div
+                    className="compare-column"
+                    key={`${car.title}-${index}`}
+                  >
+
+                    <div className="compare-car-visual">
+                      🚘
+                    </div>
+
+                    <span>
+                      {car.brand}
+                    </span>
+
+                    <h3>
+                      {car.title}
+                    </h3>
+
+                    <strong className="compare-price">
+                      {formatPrice(
+                        car.actual_price
+                      )}
+                    </strong>
+
+                    <button
+                      className="remove-compare"
+                      onClick={() =>
+                        toggleCompare(car)
+                      }
+                    >
+                      Remove
+                    </button>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+              <div className="comparison-table">
+
+                <div className="comparison-row comparison-label-row">
+                  <span>Specification</span>
+
+                  {compareCars.map((car, index) => (
+                    <strong key={index}>
+                      Car {index + 1}
+                    </strong>
+                  ))}
+                </div>
+
+                {[
+                  ["Year", "year"],
+                  ["Mileage", "mileage"],
+                  ["Fuel", "fuel"],
+                  ["Transmission", "transmission"],
+                  ["Distance", "distance"],
+                  ["Seats", "seats"],
+                  ["Owner", "owner"],
+                ].map(([label, key]) => (
+
+                  <div
+                    className="comparison-row"
+                    key={key}
+                  >
+
+                    <span>{label}</span>
+
+                    {compareCars.map(
+                      (car, index) => (
+                        <strong key={index}>
+                          {key === "distance"
+                            ? formatDistance(
+                                car[key]
+                              )
+                            : key === "mileage"
+                            ? car[key]
+                              ? `${car[key]} km/l`
+                              : "N/A"
+                            : car[key] || "N/A"}
+                        </strong>
+                      )
+                    )}
+
+                  </div>
+
+                ))}
+
+                <div className="comparison-row">
+                  <span>Estimated Resale</span>
+
+                  {compareCars.map(
+                    (car, index) => (
+                      <strong key={index}>
+                        {formatPrice(
+                          getResaleEstimate(
+                            car.actual_price,
+                            3
+                          )
+                        )}
+                      </strong>
+                    )
+                  )}
+                </div>
+
+              </div>
+
+            </section>
+
+          )}
+
+        </main>
+
+      )}
+
+      {/* ======================================================
+          RESALE
+          ====================================================== */}
+
+      {activePage === "resale" && (
+
+        <main className="page-container">
+
+          <div className="page-heading">
+
+            <div>
+              <span>FUTURE VALUE ENGINE</span>
+              <h1>Future Resale Predictor</h1>
+              <p>
+                Estimate how your car's value may
+                change over your ownership period.
+              </p>
+            </div>
+
+          </div>
+
+          <section className="resale-layout">
+
+            <div className="resale-form-card">
+
+              <div className="resale-icon">
+                🔮
+              </div>
+
+              <h2>
+                Estimate your future car value
+              </h2>
+
+              <p>
+                Enter the current estimated value
+                and expected ownership period.
+              </p>
+
+              <div className="field">
+
+                <label>
+                  Current Estimated Value
+                </label>
+
+                <div className="input-with-prefix">
+                  <span>₹</span>
+
+                  <input
+                    type="number"
+                    value={resaleForm.currentValue}
+                    onChange={(e) =>
+                      setResaleForm((prev) => ({
+                        ...prev,
+                        currentValue:
+                          e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+              </div>
+
+              <div className="field">
+
+                <label>
+                  Expected Ownership Period
+                </label>
+
+                <select
+                  value={resaleForm.ownershipYears}
+                  onChange={(e) =>
+                    setResaleForm((prev) => ({
+                      ...prev,
+                      ownershipYears:
+                        Number(e.target.value),
+                    }))
+                  }
+                >
+                  <option value={1}>
+                    1 Year
+                  </option>
+
+                  <option value={2}>
+                    2 Years
+                  </option>
+
+                  <option value={3}>
+                    3 Years
+                  </option>
+
+                  <option value={4}>
+                    4 Years
+                  </option>
+
+                  <option value={5}>
+                    5 Years
+                  </option>
+
+                  <option value={7}>
+                    7 Years
+                  </option>
+                </select>
+
+              </div>
+
+              <button
+                className="large-gradient-btn"
+                onClick={calculateResale}
+              >
+                🔮 Estimate Future Value
+              </button>
+
+            </div>
+
+            <div className="resale-result-card">
+
+              {!resaleResult ? (
+
+                <div className="resale-empty">
+
+                  <div>📈</div>
+
+                  <h3>
+                    Your resale projection
+                  </h3>
+
+                  <p>
+                    Enter your car's current value
+                    to see an estimated future value.
+                  </p>
+
+                </div>
+
+              ) : (
+
+                <>
+
+                  <div className="resale-result-header">
+                    <span>
+                      ESTIMATED FUTURE VALUE
+                    </span>
+
+                    <strong>
+                      {formatPrice(
+                        resaleResult.futureValue
+                      )}
+                    </strong>
+
+                    <p>
+                      After{" "}
+                      {resaleResult.years} years
+                    </p>
+                  </div>
+
+                  <div className="resale-chart">
+
+                    <div className="chart-line">
+
+                      <div className="chart-point point-start">
+                        <span>
+                          {formatPrice(
+                            resaleResult.currentValue
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="chart-point point-mid">
+                        <span>
+                          {formatPrice(
+                            Math.round(
+                              resaleResult.currentValue *
+                                0.895
+                            )
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="chart-point point-end">
+                        <span>
+                          {formatPrice(
+                            resaleResult.futureValue
+                          )}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    <div className="chart-years">
+                      <span>Today</span>
+                      <span>
+                        Mid ownership
+                      </span>
+                      <span>
+                        Year{" "}
+                        {resaleResult.years}
+                      </span>
+                    </div>
+
+                  </div>
+
+                  <div className="resale-metrics">
+
+                    <div>
+                      <span>Current Value</span>
+                      <strong>
+                        {formatPrice(
+                          resaleResult.currentValue
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Estimated Depreciation</span>
+                      <strong>
+                        {resaleResult.depreciation}%
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Future Value</span>
+                      <strong>
+                        {formatPrice(
+                          resaleResult.futureValue
+                        )}
+                      </strong>
+                    </div>
+
+                  </div>
+
+                  <div className="estimate-disclaimer">
+                    ⚠ This is an estimated projection,
+                    not a guaranteed future market price.
+                    Actual resale value may vary based on
+                    condition, mileage, market demand,
+                    location and other factors.
+                  </div>
+
+                </>
+
+              )}
+
+            </div>
+
+          </section>
+
+        </main>
+
+      )}
+
+      {/* ======================================================
+          AI ASSISTANT
+          ====================================================== */}
+
+      {activePage === "assistant" && (
+
+        <main className="assistant-page">
+
+          <div className="assistant-shell">
+
+            <div className="assistant-intro">
+
+              <div className="hero-ai-badge">
+                ✦ CARVALUE AI
+              </div>
+
+              <h1>
+                Your personal
+                <br />
+                <span>car intelligence assistant.</span>
+              </h1>
+
+              <p>
+                Ask questions about prices,
+                recommendations, comparisons and
+                future resale.
+              </p>
+
+              <div className="assistant-capabilities">
+
+                <button
+                  onClick={() =>
+                    setChatInput(
+                      "I want to buy a used car under ₹8 lakh."
+                    )
+                  }
+                >
+                  🎯 Find a car
+                </button>
+
+                <button
+                  onClick={() =>
+                    setChatInput(
+                      "What is a fair price for my car?"
+                    )
+                  }
+                >
+                  ₹ Fair price
+                </button>
+
+                <button
+                  onClick={() =>
+                    setChatInput(
+                      "Compare my shortlisted cars."
+                    )
+                  }
+                >
+                  ⚖ Compare
+                </button>
+
+                <button
+                  onClick={() =>
+                    setChatInput(
+                      "What could my car be worth in 3 years?"
+                    )
+                  }
+                >
+                  🔮 Resale
+                </button>
+
+              </div>
+
+            </div>
+
+            <div className="chat-window">
+
+              <div className="chat-header">
+
+                <div className="chat-avatar">
+                  ✨
+                </div>
+
+                <div>
+                  <strong>
+                    CarValue AI
+                  </strong>
+
+                  <span>
+                    ● Assistant integration ready
+                  </span>
+                </div>
+
+              </div>
+
+              <div className="chat-messages">
+
+                {chatMessages.map(
+                  (message, index) => (
+
+                    <div
+                      className={
+                        message.role === "user"
+                          ? "chat-message user"
+                          : "chat-message bot"
+                      }
+                      key={index}
+                    >
+                      {message.text}
+                    </div>
+
+                  )
+                )}
+
+              </div>
+
+              <div className="chat-input-area">
+
+                <input
+                  value={chatInput}
+                  onChange={(e) =>
+                    setChatInput(e.target.value)
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder="Ask about any car..."
+                />
+
+                <button
+                  onClick={sendChatMessage}
+                >
+                  →
+                </button>
+
+              </div>
+
+              <small className="chat-integration-note">
+                AI response engine can be connected
+                here by your AI backend/API.
+              </small>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      )}
+
+      {/* ======================================================
           CAR DETAILS MODAL
-          ======================================================== */}
+          ====================================================== */}
 
       {selectedCar && (
 
         <div
           className="car-details-overlay"
-          onClick={() =>
-            setSelectedCar(null)
-          }
+          onClick={() => setSelectedCar(null)}
         >
 
           <div
@@ -1704,6 +2530,9 @@ function App() {
               ×
             </button>
 
+            <div className="modal-car-visual">
+              🚘
+            </div>
 
             <div className="modal-header">
 
@@ -1723,155 +2552,114 @@ function App() {
 
             </div>
 
-
             <div className="modal-grid">
 
               <div className="modal-detail">
-
-                <small>
-                  Model
-                </small>
-
+                <small>Model</small>
                 <strong>
                   {selectedCar.model}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Variant
-                </small>
-
+                <small>Variant</small>
                 <strong>
                   {selectedCar.variant ||
                     "Standard"}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Year
-                </small>
-
+                <small>Year</small>
                 <strong>
                   {selectedCar.year}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Distance
-                </small>
-
+                <small>Distance</small>
                 <strong>
                   {formatDistance(
                     selectedCar.distance
                   )}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Fuel
-                </small>
-
+                <small>Fuel</small>
                 <strong>
                   {selectedCar.fuel}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Transmission
-                </small>
-
+                <small>Transmission</small>
                 <strong>
                   {selectedCar.transmission}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Mileage
-                </small>
-
+                <small>Mileage</small>
                 <strong>
                   {selectedCar.mileage
                     ? `${selectedCar.mileage} km/l`
                     : "N/A"}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Owner
-                </small>
-
+                <small>Owner</small>
                 <strong>
                   {selectedCar.owner}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Seats
-                </small>
-
+                <small>Seats</small>
                 <strong>
                   {selectedCar.seats || "N/A"}
                 </strong>
-
               </div>
 
-
               <div className="modal-detail">
-
-                <small>
-                  Match Score
-                </small>
-
+                <small>Match Score</small>
                 <strong>
                   {Math.round(
                     selectedCar.match_score
                   )}
                   %
                 </strong>
-
               </div>
 
             </div>
 
+            <div className="modal-actions">
+
+              <button
+                className="modal-compare-btn"
+                onClick={() =>
+                  toggleCompare(selectedCar)
+                }
+              >
+                ⚖ Add to Compare
+              </button>
+
+              <button
+                className="modal-close-btn"
+                onClick={() =>
+                  setSelectedCar(null)
+                }
+              >
+                Close
+              </button>
+
+            </div>
 
             <div className="modal-note">
-
               This recommendation is generated
-              using the requirements you provided
-              and the available vehicle dataset.
-
+              using your requirements and the
+              available vehicle dataset.
             </div>
 
           </div>
