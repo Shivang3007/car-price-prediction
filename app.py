@@ -7,8 +7,23 @@ import re
 import os
 
 
+# ============================================================
+# APP CONFIGURATION
+# ============================================================
+
 app = Flask(__name__)
-CORS(app)
+
+# Allow deployed frontend + other browsers/devices
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+        }
+    }
+)
 
 
 # ============================================================
@@ -17,8 +32,15 @@ CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = os.path.join(BASE_DIR, "car_price_prediction_model.joblib")
-DATA_PATH = os.path.join(BASE_DIR, "car_price_prediction_clean.csv")
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "car_price_prediction_model.joblib"
+)
+
+DATA_PATH = os.path.join(
+    BASE_DIR,
+    "car_price_prediction_clean.csv"
+)
 
 
 # ============================================================
@@ -40,11 +62,23 @@ REFERENCE_YEAR = 2026
 
 cars_df = cars_df.copy()
 
-cars_df = cars_df[cars_df["price"] >= 100000]
-cars_df = cars_df[cars_df["distance"] <= 200000]
+cars_df = cars_df[
+    cars_df["price"] >= 100000
+]
 
-cars_df.loc[cars_df["mileage"] > 40, "mileage"] = np.nan
-cars_df.loc[cars_df["engine_cc"] < 500, "engine_cc"] = np.nan
+cars_df = cars_df[
+    cars_df["distance"] <= 200000
+]
+
+cars_df.loc[
+    cars_df["mileage"] > 40,
+    "mileage"
+] = np.nan
+
+cars_df.loc[
+    cars_df["engine_cc"] < 500,
+    "engine_cc"
+] = np.nan
 
 
 # ============================================================
@@ -72,7 +106,10 @@ def owner_to_number(owner):
         "4th Owner": 4
     }
 
-    return owner_map.get(str(owner), np.nan)
+    return owner_map.get(
+        str(owner),
+        np.nan
+    )
 
 
 def extract_brand_model(title):
@@ -82,27 +119,61 @@ def extract_brand_model(title):
     if parts and parts[0].isdigit():
         parts = parts[1:]
 
-    if len(parts) >= 2 and parts[0] == "Mercedes-Benz":
+    if (
+        len(parts) >= 2
+        and parts[0] == "Mercedes-Benz"
+    ):
         brand = "Mercedes-Benz"
         model = parts[1]
 
-    elif len(parts) >= 2 and parts[0] == "Land" and parts[1] == "Rover":
+    elif (
+        len(parts) >= 2
+        and parts[0] == "Land"
+        and parts[1] == "Rover"
+    ):
         brand = "Land Rover"
-        model = parts[2] if len(parts) > 2 else "Unknown"
+        model = (
+            parts[2]
+            if len(parts) > 2
+            else "Unknown"
+        )
 
-    elif len(parts) >= 2 and parts[0] == "Maruti" and parts[1] == "Suzuki":
+    elif (
+        len(parts) >= 2
+        and parts[0] == "Maruti"
+        and parts[1] == "Suzuki"
+    ):
         brand = "Maruti Suzuki"
-        model = parts[2] if len(parts) > 2 else "Unknown"
+        model = (
+            parts[2]
+            if len(parts) > 2
+            else "Unknown"
+        )
 
-    elif len(parts) >= 2 and parts[0] == "MG":
+    elif (
+        len(parts) >= 2
+        and parts[0] == "MG"
+    ):
         brand = "MG"
         model = parts[1]
 
     else:
-        brand = parts[0] if parts else "Unknown"
-        model = parts[1] if len(parts) > 1 else "Unknown"
+        brand = (
+            parts[0]
+            if parts
+            else "Unknown"
+        )
 
-    return pd.Series([brand, model])
+        model = (
+            parts[1]
+            if len(parts) > 1
+            else "Unknown"
+        )
+
+    return pd.Series([
+        brand,
+        model
+    ])
 
 
 def fix_model_name(row):
@@ -143,27 +214,57 @@ def extract_variant(row):
     brand = str(row["brand"])
     model_name = str(row["model"])
 
-    title = title.replace(year, "", 1).strip()
-    title = title.replace(brand, "", 1).strip()
-    title = title.replace(model_name, "", 1).strip()
+    title = title.replace(
+        year,
+        "",
+        1
+    ).strip()
 
-    variant = " ".join(title.split())
+    title = title.replace(
+        brand,
+        "",
+        1
+    ).strip()
 
-    return variant if variant else "Standard"
+    title = title.replace(
+        model_name,
+        "",
+        1
+    ).strip()
+
+    variant = " ".join(
+        title.split()
+    )
+
+    return (
+        variant
+        if variant
+        else "Standard"
+    )
 
 
 # ============================================================
 # PREPARE DATASET
 # ============================================================
 
-brand_model_data = cars_df["title"].apply(extract_brand_model)
+brand_model_data = cars_df[
+    "title"
+].apply(
+    extract_brand_model
+)
 
 cars_df["brand"] = brand_model_data[0]
 cars_df["model"] = brand_model_data[1]
 
-cars_df["model"] = cars_df.apply(fix_model_name, axis=1)
+cars_df["model"] = cars_df.apply(
+    fix_model_name,
+    axis=1
+)
 
-cars_df["variant"] = cars_df.apply(extract_variant, axis=1)
+cars_df["variant"] = cars_df.apply(
+    extract_variant,
+    axis=1
+)
 
 
 # ============================================================
@@ -171,7 +272,8 @@ cars_df["variant"] = cars_df.apply(extract_variant, axis=1)
 # ============================================================
 
 cars_df["car_age"] = (
-    REFERENCE_YEAR - cars_df["year"]
+    REFERENCE_YEAR -
+    cars_df["year"]
 )
 
 cars_df["engine_liters"] = (
@@ -180,20 +282,21 @@ cars_df["engine_liters"] = (
 
 cars_df["km_per_year"] = (
     cars_df["distance"] /
-    cars_df["car_age"].clip(lower=1)
+    cars_df["car_age"].clip(
+        lower=1
+    )
 )
-
 
 cars_df["is_automatic"] = (
     cars_df["transmission"]
     .astype(str)
     .str.lower()
-    .str.contains("automatic")
+    .str.contains(
+        "automatic"
+    )
     .astype(int)
 )
 
-
-# Same logic used during model training
 cars_df["is_ev"] = (
     cars_df["title"]
     .astype(str)
@@ -205,72 +308,92 @@ cars_df["is_ev"] = (
     .astype(int)
 )
 
+title_text = cars_df[
+    "title"
+].astype(str)
 
-title_text = cars_df["title"].astype(str)
+cars_df["has_turbo"] = (
+    title_text.str.contains(
+        r"\bTurbo\b|\bT-GDI\b|\bTSI\b|\bTFSI\b|\bi-Turbo\b",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
+cars_df["has_sunroof"] = (
+    title_text.str.contains(
+        r"Sunroof|Moonroof",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
-cars_df["has_turbo"] = title_text.str.contains(
-    r"\bTurbo\b|\bT-GDI\b|\bTSI\b|\bTFSI\b|\bi-Turbo\b",
-    case=False,
-    regex=True
-).astype(int)
+cars_df["has_awd_4wd"] = (
+    title_text.str.contains(
+        r"\bAWD\b|\b4WD\b|\b4X4\b",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
+cars_df["has_dct_cvt"] = (
+    title_text.str.contains(
+        r"\bDCT\b|\bCVT\b",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
-cars_df["has_sunroof"] = title_text.str.contains(
-    r"Sunroof|Moonroof",
-    case=False,
-    regex=True
-).astype(int)
+cars_df["has_sport"] = (
+    title_text.str.contains(
+        r"\bSport\b|\bAMG\b|\bM\b|\bRS\b|\bGT\b",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
-
-cars_df["has_awd_4wd"] = title_text.str.contains(
-    r"\bAWD\b|\b4WD\b|\b4X4\b",
-    case=False,
-    regex=True
-).astype(int)
-
-
-cars_df["has_dct_cvt"] = title_text.str.contains(
-    r"\bDCT\b|\bCVT\b",
-    case=False,
-    regex=True
-).astype(int)
-
-
-cars_df["has_sport"] = title_text.str.contains(
-    r"\bSport\b|\bAMG\b|\bM\b|\bRS\b|\bGT\b",
-    case=False,
-    regex=True
-).astype(int)
-
-
-cars_df["has_luxury_trim"] = title_text.str.contains(
-    r"Luxury|Premium|Ultimate|Signature|Exclusive|Top",
-    case=False,
-    regex=True
-).astype(int)
-
+cars_df["has_luxury_trim"] = (
+    title_text.str.contains(
+        r"Luxury|Premium|Ultimate|Signature|Exclusive|Top",
+        case=False,
+        regex=True
+    )
+    .astype(int)
+)
 
 cars_df["owner_number"] = (
-    cars_df["owner"].map(owner_to_number)
+    cars_df["owner"].map(
+        owner_to_number
+    )
 )
 
 
 # ============================================================
 # VARIANT GROUPING
-# Same grouping used during model training
 # ============================================================
 
-variant_counts = cars_df["variant"].value_counts()
+variant_counts = (
+    cars_df["variant"]
+    .value_counts()
+)
 
-cars_df["variant_grouped"] = cars_df["variant"].where(
-    cars_df["variant"].map(variant_counts) >= 3,
-    "Other"
+cars_df["variant_grouped"] = (
+    cars_df["variant"].where(
+        cars_df["variant"].map(
+            variant_counts
+        ) >= 3,
+        "Other"
+    )
 )
 
 
 # ============================================================
-# BUILD DATASET-DRIVEN DROPDOWN MAPPINGS
+# DROPDOWN MAPPINGS
 # ============================================================
 
 brand_models = {}
@@ -293,12 +416,17 @@ for brand in sorted(
         .tolist()
     )
 
-    brand_models[brand] = sorted(models)
+    brand_models[brand] = sorted(
+        models
+    )
 
 
 model_variants = {}
 
-for (brand, model_name), group in cars_df.groupby(
+for (
+    brand,
+    model_name
+), group in cars_df.groupby(
     ["brand", "model"]
 ):
 
@@ -312,12 +440,10 @@ for (brand, model_name), group in cars_df.groupby(
 
     model_variants[
         f"{brand}|||{model_name}"
-    ] = sorted(variants)
+    ] = sorted(
+        variants
+    )
 
-
-# ============================================================
-# DROPDOWN OPTIONS
-# ============================================================
 
 brands = sorted(
     cars_df["brand"]
@@ -351,42 +477,19 @@ owners = sorted(
     .tolist()
 )
 
-
 seats = sorted(
     {
         int(float(x))
-        for x in cars_df["seats"].dropna().unique()
+        for x in cars_df["seats"]
+        .dropna()
+        .unique()
         if float(x).is_integer()
     }
 )
 
 
 # ============================================================
-# NUMERIC FEATURES
-# ============================================================
-
-numeric_features = [
-    "car_age",
-    "distance",
-    "engine_cc",
-    "engine_liters",
-    "mileage",
-    "seats",
-    "km_per_year",
-    "owner_number",
-    "is_automatic",
-    "is_ev",
-    "has_turbo",
-    "has_sunroof",
-    "has_awd_4wd",
-    "has_dct_cvt",
-    "has_sport",
-    "has_luxury_trim"
-]
-
-
-# ============================================================
-# PREPARE CAR FOR PRICE PREDICTION
+# PRICE PREDICTION
 # ============================================================
 
 def prepare_car_for_prediction(row):
@@ -399,7 +502,8 @@ def prepare_car_for_prediction(row):
     )
 
     row["engine_liters"] = (
-        float(row["engine_cc"]) / 1000
+        float(row["engine_cc"]) /
+        1000
     )
 
     row["km_per_year"] = (
@@ -408,8 +512,10 @@ def prepare_car_for_prediction(row):
     )
 
     row["is_automatic"] = int(
-        "automatic" in
-        str(row["transmission"]).lower()
+        "automatic"
+        in str(
+            row["transmission"]
+        ).lower()
     )
 
     title = (
@@ -458,9 +564,14 @@ def prepare_car_for_prediction(row):
         row["owner"]
     )
 
-    variant = str(row["variant"])
+    variant = str(
+        row["variant"]
+    )
 
-    if variant_counts.get(variant, 0) >= 3:
+    if variant_counts.get(
+        variant,
+        0
+    ) >= 3:
         row["variant_grouped"] = variant
     else:
         row["variant_grouped"] = "Other"
@@ -470,7 +581,11 @@ def prepare_car_for_prediction(row):
 
 def predict_car_price(row):
 
-    prepared = prepare_car_for_prediction(row)
+    prepared = (
+        prepare_car_for_prediction(
+            row
+        )
+    )
 
     prediction_df = pd.DataFrame(
         [prepared]
@@ -480,11 +595,13 @@ def predict_car_price(row):
         prediction_df
     )[0]
 
-    return float(prediction)
+    return float(
+        prediction
+    )
 
 
 # ============================================================
-# RECOMMENDATION SYSTEM
+# RECOMMENDATION SCORING
 # ============================================================
 
 def calculate_match_score(
@@ -500,11 +617,9 @@ def calculate_match_score(
 
     score = 0
 
-    # -------------------------
-    # Budget - 30
-    # -------------------------
-
-    price = float(row["price"])
+    price = float(
+        row["price"]
+    )
 
     if budget and budget > 0:
 
@@ -523,20 +638,13 @@ def calculate_match_score(
 
         score += budget_score
 
-
-    # -------------------------
-    # Fuel - 15
-    # -------------------------
-
     if fuel:
 
-        if str(row["fuel"]).lower() == str(fuel).lower():
+        if (
+            str(row["fuel"]).lower()
+            == str(fuel).lower()
+        ):
             score += 15
-
-
-    # -------------------------
-    # Transmission - 15
-    # -------------------------
 
     if transmission:
 
@@ -546,20 +654,21 @@ def calculate_match_score(
         ):
             score += 15
 
+    if (
+        mileage
+        and pd.notna(row["mileage"])
+    ):
 
-    # -------------------------
-    # Mileage - 10
-    # -------------------------
-
-    if mileage and pd.notna(row["mileage"]):
-
-        if float(row["mileage"]) >= float(mileage):
+        if (
+            float(row["mileage"])
+            >= float(mileage)
+        ):
             score += 10
 
         else:
             difference = (
-                float(mileage) -
-                float(row["mileage"])
+                float(mileage)
+                - float(row["mileage"])
             )
 
             score += max(
@@ -567,24 +676,19 @@ def calculate_match_score(
                 10 - difference
             )
 
-
-    # -------------------------
-    # Seats - 10
-    # -------------------------
-
     if seats_required:
 
-        if float(row["seats"]) >= float(seats_required):
+        if (
+            float(row["seats"])
+            >= float(seats_required)
+        ):
             score += 10
-
-
-    # -------------------------
-    # Distance - 10
-    # -------------------------
 
     if max_distance:
 
-        distance = float(row["distance"])
+        distance = float(
+            row["distance"]
+        )
 
         if distance <= max_distance:
             score += 10
@@ -599,26 +703,25 @@ def calculate_match_score(
                 10 * (1 - difference)
             )
 
-
-    # -------------------------
-    # Age - 10
-    # -------------------------
-
     if max_age:
 
-        age = REFERENCE_YEAR - int(row["year"])
+        age = (
+            REFERENCE_YEAR -
+            int(row["year"])
+        )
 
         if age <= max_age:
             score += 10
 
         else:
-            difference = age - max_age
+            difference = (
+                age - max_age
+            )
 
             score += max(
                 0,
                 10 - difference
             )
-
 
     return round(
         min(score, 100),
@@ -641,13 +744,16 @@ def home():
 
 
 # ============================================================
-# OPTIONS API
+# OPTIONS
 # ============================================================
 
-@app.route("/options", methods=["GET"])
+@app.route(
+    "/options",
+    methods=["GET", "OPTIONS"]
+)
 def options():
 
-    return jsonify({
+    response = jsonify({
         "success": True,
         "brands": brands,
         "brand_models": brand_models,
@@ -658,12 +764,24 @@ def options():
         "seats": seats
     })
 
+    # Prevent browser/proxy from serving stale options
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
+
+    response.headers["Pragma"] = "no-cache"
+
+    return response
+
 
 # ============================================================
-# PRICE PREDICTION API
+# PREDICT
 # ============================================================
 
-@app.route("/predict", methods=["POST"])
+@app.route(
+    "/predict",
+    methods=["POST", "OPTIONS"]
+)
 def predict():
 
     try:
@@ -671,15 +789,11 @@ def predict():
         data = request.get_json()
 
         if not data:
+
             return jsonify({
                 "success": False,
                 "error": "No prediction data received."
             }), 400
-
-
-        # ----------------------------------------------------
-        # Read values
-        # ----------------------------------------------------
 
         brand = str(
             data.get("brand", "")
@@ -705,45 +819,38 @@ def predict():
             data.get("owner", "")
         ).strip()
 
-
-        # ----------------------------------------------------
-        # Validate brand
-        # ----------------------------------------------------
-
         if brand not in brand_models:
 
             return jsonify({
                 "success": False,
-                "error": f"Brand '{brand}' is not available in the dataset."
+                "error": (
+                    f"Brand '{brand}' is not "
+                    "available in the dataset."
+                )
             }), 400
 
-
-        # ----------------------------------------------------
-        # Validate model
-        # ----------------------------------------------------
-
-        if model_name not in brand_models[brand]:
+        if (
+            model_name
+            not in brand_models[brand]
+        ):
 
             return jsonify({
                 "success": False,
                 "error": (
-                    f"Model '{model_name}' does not belong "
-                    f"to brand '{brand}'."
+                    f"Model '{model_name}' does not "
+                    f"belong to brand '{brand}'."
                 )
             }), 400
-
-
-        # ----------------------------------------------------
-        # Validate variant
-        # ----------------------------------------------------
 
         variant_key = (
             f"{brand}|||{model_name}"
         )
 
-        valid_variants = model_variants.get(
-            variant_key,
-            []
+        valid_variants = (
+            model_variants.get(
+                variant_key,
+                []
+            )
         )
 
         if variant not in valid_variants:
@@ -751,49 +858,41 @@ def predict():
             return jsonify({
                 "success": False,
                 "error": (
-                    f"Variant '{variant}' is not available "
-                    f"for {brand} {model_name}."
+                    f"Variant '{variant}' is not "
+                    f"available for {brand} "
+                    f"{model_name}."
                 )
             }), 400
-
-
-        # ----------------------------------------------------
-        # Validate categorical fields
-        # ----------------------------------------------------
 
         if fuel not in fuels:
 
             return jsonify({
                 "success": False,
-                "error": "Selected fuel is not available in the dataset."
+                "error": (
+                    "Selected fuel is not "
+                    "available in the dataset."
+                )
             }), 400
-
 
         if transmission not in transmissions:
 
             return jsonify({
                 "success": False,
                 "error": (
-                    "Selected transmission is not available "
-                    "in the dataset."
+                    "Selected transmission is not "
+                    "available in the dataset."
                 )
             }), 400
-
 
         if owner not in owners:
 
             return jsonify({
                 "success": False,
                 "error": (
-                    "Selected owner type is not available "
-                    "in the dataset."
+                    "Selected owner type is not "
+                    "available in the dataset."
                 )
             }), 400
-
-
-        # ----------------------------------------------------
-        # Numeric values
-        # ----------------------------------------------------
 
         year = int(
             float(data.get("year"))
@@ -807,74 +906,54 @@ def predict():
             data.get("engine_cc")
         )
 
-        mileage_value = data.get("mileage")
+        mileage_value = data.get(
+            "mileage"
+        )
 
         if mileage_value in [
             None,
             "",
             "null"
         ]:
-
             mileage = np.nan
-
         else:
-
             mileage = float(
                 mileage_value
             )
-
 
         seats_value = float(
             data.get("seats")
         )
 
-
         if int(seats_value) not in seats:
 
             return jsonify({
                 "success": False,
-                "error": "Selected seats value is not available in the dataset."
+                "error": (
+                    "Selected seats value is "
+                    "not available in the dataset."
+                )
             }), 400
 
-
-        # ----------------------------------------------------
-        # Create input row
-        # ----------------------------------------------------
-
         input_row = {
-
             "brand": brand,
-
             "model": model_name,
-
             "variant": variant,
-
             "year": year,
-
             "distance": distance,
-
             "engine_cc": engine_cc,
-
             "mileage": mileage,
-
             "seats": int(seats_value),
-
             "fuel": fuel,
-
             "transmission": transmission,
-
             "owner": owner
         }
 
-
-        # ----------------------------------------------------
-        # Predict
-        # ----------------------------------------------------
-
-        predicted_price = predict_car_price(
-            input_row
+        predicted_price = (
+            predict_car_price(
+                input_row
+            )
         )
-
 
         return jsonify({
 
@@ -884,42 +963,39 @@ def predict():
                 predicted_price
             ),
 
-            "model_name": "ExtraTrees Regressor",
+            "model_name": (
+                "ExtraTrees Regressor"
+            ),
 
             "r2_score": 0.869977,
 
             "car": {
-
                 "brand": brand,
-
                 "model": model_name,
-
                 "variant": variant,
-
                 "year": year,
-
                 "distance": distance,
-
                 "engine_cc": engine_cc,
-
-                "mileage": None
-                if pd.isna(mileage)
-                else mileage,
-
-                "seats": int(seats_value),
-
+                "mileage": (
+                    None
+                    if pd.isna(mileage)
+                    else mileage
+                ),
+                "seats": int(
+                    seats_value
+                ),
                 "fuel": fuel,
-
                 "transmission": transmission,
-
                 "owner": owner
             }
         })
 
-
     except Exception as e:
 
-        print("Prediction error:", str(e))
+        print(
+            "Prediction error:",
+            str(e)
+        )
 
         return jsonify({
             "success": False,
@@ -928,10 +1004,13 @@ def predict():
 
 
 # ============================================================
-# RECOMMEND API
+# RECOMMEND
 # ============================================================
 
-@app.route("/recommend", methods=["POST"])
+@app.route(
+    "/recommend",
+    methods=["POST", "OPTIONS"]
+)
 def recommend():
 
     try:
@@ -942,20 +1021,30 @@ def recommend():
             data.get("budget", 0)
         )
 
-        fuel = data.get("fuel") or None
-        transmission = data.get("transmission") or None
+        fuel = (
+            data.get("fuel")
+            or None
+        )
 
-        mileage = data.get("mileage")
+        transmission = (
+            data.get("transmission")
+            or None
+        )
+
+        mileage = data.get(
+            "mileage"
+        )
 
         if mileage not in [
             None,
             "",
             "null"
         ]:
-            mileage = float(mileage)
+            mileage = float(
+                mileage
+            )
         else:
             mileage = None
-
 
         seats_required = data.get(
             "seats"
@@ -972,7 +1061,6 @@ def recommend():
         else:
             seats_required = None
 
-
         max_distance = data.get(
             "max_distance"
         )
@@ -987,7 +1075,6 @@ def recommend():
             )
         else:
             max_distance = None
-
 
         max_age = data.get(
             "max_age"
@@ -1004,13 +1091,7 @@ def recommend():
         else:
             max_age = None
 
-
-        # ----------------------------------------------------
-        # Initial filtering
-        # ----------------------------------------------------
-
         filtered = cars_df.copy()
-
 
         if budget > 0:
 
@@ -1018,84 +1099,78 @@ def recommend():
                 filtered["price"] <= budget
             ]
 
-
         if fuel:
 
             filtered = filtered[
-                filtered["fuel"].astype(str).str.lower()
+                filtered["fuel"]
+                .astype(str)
+                .str.lower()
                 == str(fuel).lower()
             ]
-
 
         if transmission:
 
             filtered = filtered[
-                filtered["transmission"].astype(str).str.lower()
+                filtered["transmission"]
+                .astype(str)
+                .str.lower()
                 == str(transmission).lower()
             ]
-
 
         if seats_required:
 
             filtered = filtered[
-                filtered["seats"] >= seats_required
+                filtered["seats"]
+                >= seats_required
             ]
-
 
         if max_distance:
 
             filtered = filtered[
-                filtered["distance"] <= max_distance
+                filtered["distance"]
+                <= max_distance
             ]
-
 
         if max_age:
 
             filtered = filtered[
-                (REFERENCE_YEAR - filtered["year"])
-                <= max_age
+                (
+                    REFERENCE_YEAR
+                    - filtered["year"]
+                ) <= max_age
             ]
-
-
-        # ----------------------------------------------------
-        # Relaxed filtering if no result
-        # ----------------------------------------------------
 
         if len(filtered) == 0:
 
             filtered = cars_df.copy()
 
-
             if fuel:
 
                 filtered = filtered[
-                    filtered["fuel"].astype(str).str.lower()
+                    filtered["fuel"]
+                    .astype(str)
+                    .str.lower()
                     == str(fuel).lower()
                 ]
-
 
             if transmission:
 
                 filtered = filtered[
-                    filtered["transmission"].astype(str).str.lower()
+                    filtered["transmission"]
+                    .astype(str)
+                    .str.lower()
                     == str(transmission).lower()
                 ]
-
 
             if len(filtered) == 0:
 
                 filtered = cars_df.copy()
 
-
-        # ----------------------------------------------------
-        # Score
-        # ----------------------------------------------------
-
         filtered = filtered.copy()
 
-        filtered["match_score"] = filtered.apply(
-
-            lambda row:
+        filtered["match_score"] = (
+            filtered.apply(
+                lambda row:
                 calculate_match_score(
                     row,
                     budget,
@@ -1106,14 +1181,9 @@ def recommend():
                     max_distance,
                     max_age
                 ),
-
-            axis=1
+                axis=1
+            )
         )
-
-
-        # ----------------------------------------------------
-        # Sort
-        # ----------------------------------------------------
 
         filtered = filtered.sort_values(
             by=[
@@ -1126,21 +1196,25 @@ def recommend():
             ]
         )
 
-
-        # Top 12
         results = []
 
-        for _, row in filtered.head(12).iterrows():
+        for _, row in filtered.head(
+            12
+        ).iterrows():
 
             try:
-                estimated_price = predict_car_price(
-                    row.to_dict()
+
+                estimated_price = (
+                    predict_car_price(
+                        row.to_dict()
+                    )
                 )
+
             except Exception:
+
                 estimated_price = float(
                     row["price"]
                 )
-
 
             results.append({
 
@@ -1152,7 +1226,9 @@ def recommend():
 
                 "variant": row["variant"],
 
-                "year": int(row["year"]),
+                "year": int(
+                    row["year"]
+                ),
 
                 "actual_price": float(
                     row["price"]
@@ -1166,25 +1242,35 @@ def recommend():
                     row["distance"]
                 ),
 
-                "mileage":
+                "mileage": (
                     None
-                    if pd.isna(row["mileage"])
-                    else float(row["mileage"]),
+                    if pd.isna(
+                        row["mileage"]
+                    )
+                    else float(
+                        row["mileage"]
+                    )
+                ),
 
                 "fuel": row["fuel"],
 
-                "transmission": row["transmission"],
+                "transmission": (
+                    row["transmission"]
+                ),
 
                 "owner": row["owner"],
 
-                "seats": int(
-                    row["seats"]
-                )
-                if pd.notna(row["seats"])
-                else None,
+                "seats": (
+                    int(row["seats"])
+                    if pd.notna(
+                        row["seats"]
+                    )
+                    else None
+                ),
 
                 "car_age": int(
-                    REFERENCE_YEAR - row["year"]
+                    REFERENCE_YEAR
+                    - row["year"]
                 ),
 
                 "match_score": float(
@@ -1197,20 +1283,23 @@ def recommend():
                 )
             })
 
-
         return jsonify({
 
             "success": True,
 
-            "count": len(results),
+            "count": len(
+                results
+            ),
 
             "results": results
         })
 
-
     except Exception as e:
 
-        print("Recommendation error:", str(e))
+        print(
+            "Recommendation error:",
+            str(e)
+        )
 
         return jsonify({
             "success": False,
@@ -1228,17 +1317,39 @@ if __name__ == "__main__":
     print("=" * 60)
     print("CAR PRICE PREDICTION API")
     print("=" * 60)
-    print(f"Cars available: {len(cars_df)}")
-    print(f"Brands: {len(brands)}")
-    print(f"Models: {cars_df['model'].nunique()}")
-    print(f"Variants: {cars_df['variant'].nunique()}")
+
+    print(
+        f"Cars available: {len(cars_df)}"
+    )
+
+    print(
+        f"Brands: {len(brands)}"
+    )
+
+    print(
+        f"Models: {cars_df['model'].nunique()}"
+    )
+
+    print(
+        f"Variants: {cars_df['variant'].nunique()}"
+    )
+
     print("")
-    print("Server: http://127.0.0.1:5000")
+    print(
+        "Server: http://127.0.0.1:5000"
+    )
     print("=" * 60)
     print("")
 
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
     app.run(
         host="0.0.0.0",
-        port=5000,
-        debug=True
+        port=port,
+        debug=False
     )
